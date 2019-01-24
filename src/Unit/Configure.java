@@ -1,6 +1,6 @@
 package Unit;
 
-import lib.tool.Tools;
+import TLD.Tools;
 
 import java.io.*;
 import java.util.ArrayList;
@@ -178,19 +178,4 @@ public class Configure {
         return d;
     }
 
-    public static int[] GetIntArray(Object o, int[] d) {
-        if (o != null) {
-            try {
-                int[] i = StringArrays.toInteger(o.toString().trim().split("\\s+"));
-                if (i.length == 0) {
-                    return d;
-                } else {
-                    return i;
-                }
-            } catch (NumberFormatException e) {
-                return d;
-            }
-        }
-        return d;
-    }
 }

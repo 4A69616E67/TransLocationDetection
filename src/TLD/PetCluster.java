@@ -65,16 +65,6 @@ public class PetCluster {
             int[] ChrIndex = new int[0], RegionIndex = new int[0];
             int MaxLength = 0, CountIndex = 0;
             switch (InFile.BedpeDetect()) {
-                case BedpePointFormat:
-                    if (Length == 0) {
-                        System.err.println("Error! extend length is 0");
-                        System.exit(1);
-                    }
-                    ChrIndex = new int[]{0, 2};
-                    RegionIndex = new int[]{1, 1, 3, 3};
-                    CountIndex = 4;
-                    MaxLength = 5;
-                    break;
                 case BedpeRegionFormat:
                     ChrIndex = new int[]{0, 3};
                     RegionIndex = new int[]{1, 2, 4, 5};

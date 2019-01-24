@@ -3,7 +3,7 @@ package TLD;
 import kotlin.text.Charsets;
 import File.BedpeFile;
 import lib.tool.Statistic;
-import lib.tool.Tools;
+import TLD.Tools;
 import Unit.*;
 import org.apache.commons.cli.*;
 import org.apache.commons.io.FileUtils;
@@ -128,7 +128,7 @@ public class CreateMatrix {
             ChrSize[i] = Chromosomes[i].Size;
         }
         int SumBin = 0;
-        int[] ChrBinSize = Statistic.CalculatorBinSize(ChrSize, Resolution);
+        int[] ChrBinSize = Tools.CalculateBinSize(ChrSize, Resolution);
         Hashtable<String, Integer> IndexBias = new Hashtable<>();
         //计算bin的总数
         for (int i = 0; i < ChrBinSize.length; i++) {
@@ -202,7 +202,7 @@ public class CreateMatrix {
     public Array2DRowRealMatrix Run(ChrRegion reg1, ChrRegion reg2) throws IOException {
         System.out.println(new Date() + "\tBegin to creat interaction matrix " + reg1.toString().replace("\t", ":") + " " + reg2.toString().replace("\t", ":"));
         int[] ChrBinSize;
-        ChrBinSize = Statistic.CalculatorBinSize(new int[]{reg1.Length, reg2.Length}, Resolution);
+        ChrBinSize = Tools.CalculateBinSize(new int[]{reg1.Length, reg2.Length}, Resolution);
         if (Math.max(ChrBinSize[0], ChrBinSize[1]) > Opts.MaxBinNum) {
             System.err.println("Error ! too many bins, there are " + Math.max(ChrBinSize[0], ChrBinSize[1]) + " bins.");
             System.exit(0);
@@ -381,9 +381,6 @@ public class CreateMatrix {
     private int[] IndexParse(BedpeFile file) throws IOException {
         int[] Index = new int[6];
         switch (file.BedpeDetect()) {
-            case BedpePointFormat:
-                Index = new int[]{0, 1, 1, 2, 3, 3};
-                break;
             case BedpeRegionFormat:
                 Index = new int[]{0, 1, 2, 3, 4, 5};
                 break;
