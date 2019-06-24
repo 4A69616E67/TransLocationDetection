@@ -1,7 +1,7 @@
 package TLD;
 
-import File.BedpeFile;
-import lib.tool.Tools;
+import File.BedPeFile.*;
+import TLD.Tools;
 import Unit.*;
 import org.apache.commons.cli.*;
 
@@ -99,12 +99,12 @@ public class PetCluster {
             for (InterAction a : List) {
                 ChrRegion region1 = a.getLeft();
                 ChrRegion region2 = a.getRight();
-                int count = a.Count == 0 ? 1 : a.Count;
-                String key = region1.Chr.Name + "-" + region2.Chr.Name;
+                int count = a.Score == 0 ? 1 : a.Score;
+                String key = region1.Chr + "-" + region2.Chr;
                 if (!ChrMatrix.containsKey(key)) {
                     ChrMatrix.put(key, new ArrayList<>());
                 }
-                ChrMatrix.get(key).add(new int[]{region1.Begin - Length, region1.Terminal + Length, region2.Begin - Length, region2.Terminal + Length, count});
+                ChrMatrix.get(key).add(new int[]{region1.region.Start - Length, region1.region.End + Length, region2.region.Start - Length, region2.region.End + Length, count});
             }
         } else {
             return Cluster;
@@ -131,7 +131,7 @@ public class PetCluster {
                         ArrayList<int[]> cluster = FindCluster(ChrMatrix.get(chrinter));
                         synchronized (t) {
                             for (int[] aCluster : cluster) {
-                                Cluster.add(new InterAction(new ChrRegion(new Chromosome(chr1), aCluster[0] + Length, aCluster[1] - Length), new ChrRegion(new Chromosome(chr2), aCluster[2] + Length, aCluster[3] - Length), aCluster[4]));
+                                Cluster.add(new InterAction(new ChrRegion(chr1, aCluster[0] + Length, aCluster[1] - Length), new ChrRegion(chr2, aCluster[2] + Length, aCluster[3] - Length), aCluster[4]));
                             }
                         }
                     }
@@ -149,7 +149,7 @@ public class PetCluster {
         for (InterAction action : Cluster) {
             ChrRegion chr1 = action.getLeft();
             ChrRegion chr2 = action.getRight();
-            out.write(chr1.Chr.Name + "\t" + chr1.Begin + "\t" + chr1.Terminal + "\t" + chr2.Chr.Name + "\t" + chr2.Begin + "\t" + chr2.Terminal + "\t" + action.Count + "\n");
+            out.write(chr1.Chr + "\t" + chr1.region.Start + "\t" + chr1.region.End + "\t" + chr2.Chr + "\t" + chr2.region.Start + "\t" + chr2.region.End + "\t" + action.Score + "\n");
         }
         out.close();
         out = new BufferedWriter(new FileWriter(OutPrefix + ".cluster.stat"));

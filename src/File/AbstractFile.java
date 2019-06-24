@@ -4,10 +4,18 @@ import Unit.SortItem;
 
 import java.io.*;
 import java.util.*;
+import java.util.zip.GZIPInputStream;
 
+/**
+ * Created by snowf on 2019/2/17.
+ */
 public abstract class AbstractFile<E extends Comparable<E>> extends File {
-    protected E Item;
-    public long ItemNum;
+    public enum FileFormat {
+        ErrorFormat, EmptyFile, BedpePointFormat, BedpeRegionFormat, Phred33, Phred64, ShortReads, LongReads, Undefine
+    }
+    public long ItemNum = 0;
+    private boolean Sorted = false;
+    private int BufferSize = 1024 * 1024;// default 1M
     protected BufferedReader reader;
     protected BufferedWriter writer;
 
@@ -16,26 +24,34 @@ public abstract class AbstractFile<E extends Comparable<E>> extends File {
     }
 
     public AbstractFile(File file) {
-        this(file.getPath());
+        super(file.getPath());
     }
 
-    public long CalculateItemNumber() throws IOException {
+    public AbstractFile(AbstractFile file) {
+        super(file.getPath());
+        ItemNum = file.ItemNum;
+        reader = null;
+        writer = null;
+    }
+
+    public void CalculateItemNumber() throws IOException {
+        ItemNum = 0;
         if (!isFile()) {
-            return 0;
+            return;
         }
-        long ItemNumber = 0;
         ReadOpen();
         while (ReadItemLine() != null) {
-            ItemNumber++;
+            ItemNum++;
         }
         ReadClose();
-        ItemNum = ItemNumber;
-        return ItemNum;
     }
 
-    public BufferedReader ReadOpen() throws IOException {
-        reader = new BufferedReader(new FileReader(this));
-        return reader;
+    public void ReadOpen() throws IOException {
+        if (getName().matches(".*\\.gz")) {
+            reader = new BufferedReader(new InputStreamReader(new GZIPInputStream(new FileInputStream(this))), BufferSize);
+        } else {
+            reader = new BufferedReader(new FileReader(this), BufferSize);
+        }
     }
 
     public void ReadClose() throws IOException {
@@ -46,8 +62,8 @@ public abstract class AbstractFile<E extends Comparable<E>> extends File {
         return WriteOpen(false);
     }
 
-    public BufferedWriter WriteOpen(boolean append) throws IOException {
-        writer = new BufferedWriter(new FileWriter(this, append));
+    private BufferedWriter WriteOpen(boolean append) throws IOException {
+        writer = new BufferedWriter(new FileWriter(this, append), BufferSize);
         return writer;
     }
 
@@ -55,10 +71,45 @@ public abstract class AbstractFile<E extends Comparable<E>> extends File {
         writer.close();
     }
 
-    protected abstract E ExtractItem(String s);
+    public ArrayList<char[]> Read() throws IOException {
+        ReadOpen();
+        ItemNum = 0;
+        ArrayList<char[]> List = new ArrayList<>();
+        String[] Lines;
+        while ((Lines = ReadItemLine()) != null) {
+            char[] lines = String.join("\n", Lines).toCharArray();
+            List.add(lines);
+            ItemNum++;
+        }
+        ReadClose();
+        return List;
+    }
 
-    public synchronized String ReadItemLine() throws IOException {
-        return reader.readLine();
+    protected abstract E ExtractItem(String[] s);
+
+    public ArrayList<E> Extraction(int num) throws IOException {
+        ArrayList<E> list = new ArrayList<>();
+        ReadOpen();
+        E item;
+        int i = 0;
+        while ((item = ReadItem()) != null) {
+            i++;
+            if (i <= num) {
+                list.add(item);
+            } else {
+                break;
+            }
+        }
+        ReadClose();
+        return list;
+    }
+
+    public synchronized String[] ReadItemLine() throws IOException {
+        String line = reader.readLine();
+        if (line != null) {
+            return new String[]{line};
+        }
+        return null;
     }
 
     public E ReadItem() throws IOException {
@@ -80,49 +131,66 @@ public abstract class AbstractFile<E extends Comparable<E>> extends File {
         return writer;
     }
 
-    public void Append(AbstractFile<E> file) throws IOException {
+    public synchronized void Append(AbstractFile file) throws IOException {
         System.out.println(new Date() + "\tAppend " + file.getName() + " to " + getName());
-        String item;
+        String[] item;
         file.ReadOpen();
-        this.WriteOpen(true);
+        BufferedWriter writer = WriteOpen(true);
         while ((item = file.ReadItemLine()) != null) {
-            this.getWriter().write(item + "\n");
+            writer.write(String.join("\n", item) + "\n");
+            ItemNum++;
         }
         file.ReadClose();
         this.WriteClose();
         System.out.println(new Date() + "\tEnd append " + file.getName() + " to " + getName());
     }
 
-    public void Append(String item) throws IOException {
-        this.WriteOpen(true);
-        this.getWriter().write(item);
+    public synchronized void Append(ArrayList List) throws IOException {
+        BufferedWriter writer = WriteOpen(true);
+        for (Object i : List) {
+            writer.write(i.toString());
+            writer.write("\n");
+            ItemNum++;
+        }
         WriteClose();
     }
 
-    public void SortFile(AbstractFile<E> OutFile) throws IOException {
-        System.out.println(new Date() + "\tBegin to sort file " + getName());
+    public synchronized void Append(String item) throws IOException {
+        BufferedWriter writer = WriteOpen(true);
+        writer.write(item);
+        WriteClose();
+        ItemNum++;
+    }
+
+    public void SortFile(AbstractFile OutFile) throws IOException {
+        System.out.println(new Date() + "\tSort file: " + getName());
         BufferedWriter outfile = OutFile.WriteOpen();
-        long ItemCount = 0;
+        ItemNum = 0;
         ReadOpen();
         SortItem<E> sortItem;
         ArrayList<SortItem<E>> SortList = new ArrayList<>();
         while ((sortItem = ReadSortItem()) != null) {
+            sortItem.index = (int) ItemNum;
             SortList.add(sortItem);
-            ItemCount++;
+            ItemNum++;
         }
-        ItemNum = ItemCount;
         Collections.sort(SortList);
-        for (SortItem aSortList : SortList) {
-            outfile.write(aSortList.getLines());
+        ArrayList<char[]> LinesList = Read();
+        for (int i = 0; i < SortList.size(); i++) {
+            outfile.write(LinesList.get(SortList.get(i).index));
             outfile.write("\n");
+            LinesList.set(SortList.get(i).index, null);//及时去除，减少内存占用
+            SortList.set(i, null);//及时去除，减少内存占用
         }
-        SortList.clear();
         outfile.close();
         ReadClose();
-        System.out.println(new Date() + "\tEnd sort file " + getName());
+        Sorted = true;
+        System.out.println(new Date() + "\tEnd sort file: " + getName());
     }
 
-    public void MergeSortFile(AbstractFile<E>[] InFile) throws IOException {
+    public synchronized void MergeSortFile(AbstractFile<E>[] InFile) throws IOException {
+        ItemNum = 0;
+        String[] Lines;
         System.out.print(new Date() + "\tMerge ");
         for (File s : InFile) {
             System.out.print(s.getName() + " ");
@@ -130,13 +198,16 @@ public abstract class AbstractFile<E extends Comparable<E>> extends File {
         System.out.print("to " + getName() + "\n");
         //=========================================================================================
         LinkedList<SortItem<E>> SortList = new LinkedList<>();
-        WriteOpen();
+        ArrayList<String[]> LineList = new ArrayList<>();
+        BufferedWriter writer = WriteOpen();
         if (InFile.length == 0) {
             return;
         }
         for (int i = 0; i < InFile.length; i++) {
             InFile[i].ReadOpen();
-            SortItem<E> item = InFile[i].ReadSortItem();
+            Lines = InFile[i].ReadItemLine();
+            LineList.add(Lines);
+            SortItem<E> item = InFile[i].ExtractSortItem(Lines);
             if (item != null) {
                 item.serial = i;
                 SortList.add(item);
@@ -146,11 +217,14 @@ public abstract class AbstractFile<E extends Comparable<E>> extends File {
         }
         Collections.sort(SortList);
         while (SortList.size() > 0) {
-            SortItem<E> item = SortList.removeFirst();
+            SortItem<E> item = SortList.remove(0);
             int serial = item.serial;
-            this.getWriter().write(item.getLines());
-            this.getWriter().write("\n");
-            item = InFile[serial].ReadSortItem();
+            writer.write(String.join("\n", LineList.get(serial)));
+            writer.write("\n");
+            ItemNum++;
+            Lines = InFile[serial].ReadItemLine();
+            LineList.set(serial, Lines);
+            item = InFile[serial].ExtractSortItem(Lines);
             if (item == null) {
                 continue;
             }
@@ -180,52 +254,100 @@ public abstract class AbstractFile<E extends Comparable<E>> extends File {
         System.out.print("to " + getName() + "\n");
     }
 
-    public void Merge(AbstractFile[] File) throws IOException {
-        this.WriteOpen();
-        String line;
-        for (AbstractFile x : File) {
+    public synchronized void Merge(AbstractFile[] files) throws IOException {
+        BufferedWriter writer = WriteOpen();
+        ItemNum = 0;
+        String[] lines;
+        for (AbstractFile x : files) {
             System.out.println(new Date() + "\tMerge " + x.getName() + " to " + getName());
             x.ReadOpen();
-            while ((line = x.ReadItemLine()) != null) {
-                this.getWriter().write(line + "\n");
+            while ((lines = x.ReadItemLine()) != null) {
+                for (String line : lines) {
+                    writer.write(line);
+                    writer.write("\n");
+                }
+                ItemNum++;
             }
             x.ReadClose();
         }
-        this.WriteClose();
+        WriteClose();
         System.out.println(new Date() + "\tDone merge");
     }
+
 
     public ArrayList<CommonFile> SplitFile(String Prefix, long itemNum) throws IOException {
         int filecount = 0;
         int count = 0;
-        String line;
+        CommonFile TempFile;
+        String[] lines;
         ArrayList<CommonFile> Outfile = new ArrayList<>();
         this.ReadOpen();
-        Outfile.add(new CommonFile(Prefix + ".Split" + filecount));
-        BufferedWriter outfile = Outfile.get(Outfile.size() - 1).WriteOpen();
-        while ((line = ReadItemLine()) != null) {
+        Outfile.add(TempFile = new CommonFile(Prefix + ".Split" + filecount));
+        BufferedWriter outfile = TempFile.WriteOpen();
+        while ((lines = ReadItemLine()) != null) {
             count++;
             if (count > itemNum) {
+                TempFile.ItemNum = itemNum;
                 outfile.close();
                 filecount++;
-                Outfile.add(new CommonFile(Prefix + ".Split" + filecount));
-                outfile = Outfile.get(Outfile.size() - 1).WriteOpen();
+                Outfile.add(TempFile = new CommonFile(Prefix + ".Split" + filecount));
+                outfile = TempFile.WriteOpen();
                 count = 1;
             }
-            outfile.write(line + "\n");
+            outfile.write(String.join("\n", lines) + "\n");
         }
+        TempFile.ItemNum = count;
         outfile.close();
         this.ReadClose();
         return Outfile;
     }
 
-    public E getItem() {
-        return Item;
+
+    public boolean clean() {
+        return clean(this);
     }
 
-    public abstract SortItem<E> ReadSortItem() throws IOException;
+    public static boolean clean(File f) {
+        try {
+            BufferedWriter writer = new BufferedWriter(new FileWriter(f));
+            writer.close();
+        } catch (IOException e) {
+            System.err.println("Warning! can't clean " + f.getPath());
+            return false;
+        }
+        return true;
+    }
 
+    public static void delete(File f) {
+        if (f.exists() && !f.delete()) {
+            System.err.println("Warning! can't delete " + f.getPath());
+        }
+    }
 
+    public SortItem<E> ReadSortItem() throws IOException {
+        return ExtractSortItem(ReadItemLine());
+    }
+
+    protected abstract SortItem<E> ExtractSortItem(String[] s);
+
+    public long getItemNum() {
+        if (ItemNum <= 0) {
+            try {
+                CalculateItemNumber();
+            } catch (IOException e) {
+                System.err.println("Warning! can't get accurate item number, current item number: " + getName() + " " + ItemNum);
+            }
+        }
+        return ItemNum;
+    }
+
+    public boolean isSorted() {
+        return Sorted;
+    }
+
+    public void setBufferSize(int bufferSize) {
+        BufferSize = bufferSize;
+    }
 }
 
 

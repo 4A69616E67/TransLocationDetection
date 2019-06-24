@@ -1,8 +1,7 @@
 
 package TLD;
 
-import kotlin.text.Charsets;
-import File.BedpeFile;
+import File.BedPeFile.*;
 import Unit.*;
 import org.apache.commons.cli.*;
 import org.apache.commons.io.FileUtils;
@@ -13,6 +12,7 @@ import org.apache.commons.math3.stat.StatUtils;
 import org.apache.commons.math3.stat.inference.TestUtils;
 
 import java.io.*;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 /**
@@ -39,7 +39,7 @@ public class TransLocationDetection {
     private File ChrSizeFile;
 
 //    static {
-//        System.loadLibrary(Core.NATIVE_LIBRARY_NAME);
+//        Unit.System.loadLibrary(Core.NATIVE_LIBRARY_NAME);
 //    }
 
     public static void main(String[] args) throws ParseException, IOException, InterruptedException {
@@ -102,19 +102,19 @@ public class TransLocationDetection {
             new HelpFormatter().printHelp("java -cp path/" + Opts.JarFile.getName() + " " + TransLocationDetection.class.getName(), Helpheader, Arguement, Helpfooter, true);
             System.exit(1);
         }
-        ChrRegion chr1 = new ChrRegion(new Chromosome("?"), 0, 0), chr2 = new ChrRegion(new Chromosome("?"), 0, 0);
+        ChrRegion chr1 = new ChrRegion("?", 0, 0), chr2 = new ChrRegion("?", 0, 0);
         if (Comline.hasOption("chr")) {
             String[] s = Comline.getOptionValues("chr");
-            chr1 = new ChrRegion(new Chromosome(s[0].split(":")[0]), Integer.parseInt(s[0].split(":")[1]), Integer.parseInt(s[0].split(":")[1]));
+            chr1 = new ChrRegion(s[0].split(":")[0], Integer.parseInt(s[0].split(":")[1]), Integer.parseInt(s[0].split(":")[1]));
             if (s.length > 1) {
-                chr2 = new ChrRegion(new Chromosome(s[1].split(":")[0]), Integer.parseInt(s[1].split(":")[1]), Integer.parseInt(s[1].split(":")[1]));
+                chr2 = new ChrRegion(s[1].split(":")[0], Integer.parseInt(s[1].split(":")[1]), Integer.parseInt(s[1].split(":")[1]));
             } else {
                 chr2 = chr1;
             }
         }
 //        Resolution = Integer.parseInt(Comline.getOptionValue("r"));
         BedpeFile = new BedpeFile(Comline.getOptionValue("f"));
-        OutPrefix = Comline.hasOption("p") ? Comline.getOptionValue("p") : chr1.Chr.Name + "-" + chr2.Chr.Name;
+        OutPrefix = Comline.hasOption("p") ? Comline.getOptionValue("p") : chr1.Chr + "-" + chr2.Chr;
         ExtendLength = Comline.hasOption("l") ? Integer.parseInt(Comline.getOptionValue("l")) : ExtendLength;
         Threads = Comline.hasOption("t") ? Integer.parseInt(Comline.getOptionValue("t")) : 1;
         ChrSizeFile = Comline.hasOption("s") ? new File(Comline.getOptionValue("s")) : null;
@@ -162,7 +162,7 @@ public class TransLocationDetection {
         //--------------------merge closed cluster----------------------
         System.out.println(new Date() + "\tMerge Cluster");
         for (InterAction a : TempInteractionList) {
-            if (a.Count >= MinCount) {
+            if (a.Score >= MinCount) {
                 TempInteractionList1.add(a);
             }
         }
@@ -173,16 +173,16 @@ public class TransLocationDetection {
         BufferedWriter writer = new BufferedWriter(new FileWriter(ClusterFile));
         for (int i = 0; i < TempInteractionList.size(); i++) {
             InterAction action = TempInteractionList.get(i);
-            if (action.Count >= MinCount) {
+            if (action.Score >= MinCount) {
                 ChrRegion chr1 = action.getLeft();
                 ChrRegion chr2 = action.getRight();
-                writer.write("region" + order + "\t" + chr1 + "\t" + chr2 + "\t" + action.Count + "\n");
-                if (chr1.Terminal - chr1.Begin > MinRegionLength && chr2.Terminal - chr2.Begin > MinRegionLength) {
-                    TransLocationRegionList.add(new InterAction(new ChrRegion(chr1.Chr, Math.max(0, chr1.Begin * 2 - chr1.Terminal), Math.min(chr1.Terminal * 2 - chr1.Begin, Opts.ChrSize.get(chr1.Chr.Name))), new ChrRegion(chr2.Chr, Math.max(0, chr2.Begin * 2 - chr2.Terminal), Math.min(chr2.Terminal * 2 - chr2.Begin, Opts.ChrSize.get(chr2.Chr.Name))), action.Count));
+                writer.write("region" + order + "\t" + chr1 + "\t" + chr2 + "\t" + action.Score + "\n");
+                if (chr1.region.End - chr1.region.Start > MinRegionLength && chr2.region.End - chr2.region.Start > MinRegionLength) {
+                    TransLocationRegionList.add(new InterAction(new ChrRegion(chr1.Chr, Math.max(0, chr1.region.Start * 2 - chr1.region.End), Math.min(chr1.region.End * 2 - chr1.region.Start, Opts.ChrSize.get(chr1.Chr))), new ChrRegion(chr2.Chr, Math.max(0, chr2.region.Start * 2 - chr2.region.End), Math.min(chr2.region.End * 2 - chr2.region.Start, Opts.ChrSize.get(chr2.Chr))), action.Score));
                     RegionResolutionList.add(AutoResolution(TransLocationRegionList.get(TransLocationRegionList.size() - 1)));
-                    new File(OutDir + "/" + chr1.Chr.Name + "-" + chr2.Chr.Name).mkdirs();
-                    ChrMatrixPrefix.put(OutDir + "/" + chr1.Chr.Name + "-" + chr2.Chr.Name + "/" + OutPrefix + "." + chr1.Chr.Name + "-" + chr2.Chr.Name, new String[]{chr1.Chr.Name, chr2.Chr.Name});
-                    TransLocationRegionPrefix.add(OutDir + "/" + chr1.Chr.Name + "-" + chr2.Chr.Name + "/" + OutPrefix + ".r" + order + "." + Tools.UnitTrans(RegionResolutionList.get(RegionResolutionList.size() - 1), "b", "k") + "k");
+                    new File(OutDir + "/" + chr1.Chr + "-" + chr2.Chr).mkdirs();
+                    ChrMatrixPrefix.put(OutDir + "/" + chr1.Chr + "-" + chr2.Chr + "/" + OutPrefix + "." + chr1.Chr + "-" + chr2.Chr, new String[]{chr1.Chr, chr2.Chr});
+                    TransLocationRegionPrefix.add(OutDir + "/" + chr1.Chr + "-" + chr2.Chr + "/" + OutPrefix + ".r" + order + "." + Tools.UnitTrans(RegionResolutionList.get(RegionResolutionList.size() - 1), "b", "k") + "k");
                 }
                 order++;
             }
@@ -202,7 +202,7 @@ public class TransLocationDetection {
             ArrayList<InterAction> ChrMatrixRegion = new ArrayList<>();
             Set<String> ChrMatrixList = ChrMatrixPrefix.keySet();
             for (String s : ChrMatrixList) {
-                ChrMatrixRegion.add(new InterAction(new ChrRegion(new Chromosome(ChrMatrixPrefix.get(s)[0]), 0, Opts.ChrSize.get(ChrMatrixPrefix.get(s)[0])), new ChrRegion(new Chromosome(ChrMatrixPrefix.get(s)[1]), 0, Opts.ChrSize.get(ChrMatrixPrefix.get(s)[1]))));
+                ChrMatrixRegion.add(new InterAction(new ChrRegion((ChrMatrixPrefix.get(s)[0]), 0, Opts.ChrSize.get(ChrMatrixPrefix.get(s)[0])), new ChrRegion((ChrMatrixPrefix.get(s)[1]), 0, Opts.ChrSize.get(ChrMatrixPrefix.get(s)[1]))));
             }
             System.out.println(new Date() + "\tStart create chromosome interaction matrix, list size is " + ChrMatrixRegion.size());
             MatrixList = new CreateMatrix(BedpeFile, Chromosomes, Resolution, null, Threads).Run(ChrMatrixRegion);
@@ -229,7 +229,7 @@ public class TransLocationDetection {
                                     }
                                 }
                                 Tools.PrintMatrix(finalMatrixList.get(index), new File(p + ".2d.matrix"), new File(p + ".spare.matrix"));
-                                String ComLine = Configure.Python + " " + Opts.ScriptDir + "/RegionPlot.py -i " + p + ".2d.matrix -l " + ClusterFile + " -r " + Resolution + " -c " + ChrMatrixPrefix.get(p)[0] + ":0 " + ChrMatrixPrefix.get(p)[1] + ":0" + " -o " + p + ".Trans.pdf -t region";
+                                String ComLine = Opts.Python.Exe() + " " + Opts.OutScriptDir + "/RegionPlot.py -i " + p + ".2d.matrix -l " + ClusterFile + " -r " + Resolution + " -c " + ChrMatrixPrefix.get(p)[0] + ":0 " + ChrMatrixPrefix.get(p)[1] + ":0" + " -o " + p + ".Trans.pdf -t region";
                                 Opts.CommandOutFile.Append(ComLine + "\n");
                                 Tools.ExecuteCommandStr(ComLine, new PrintWriter(System.out), new PrintWriter(System.err));
                             }
@@ -268,21 +268,21 @@ public class TransLocationDetection {
                         }
                         try {
                             if (new File(prefix + ".spare.matrix").length() > 0) {
-                                String ComLine = Configure.Python + " " + Opts.ScriptDir + "/LongCornerDetect.py -i " + prefix + ".2d.matrix" + " -c " + chr1.Chr.Name + ":" + chr1.Begin + " " + chr2.Chr.Name + ":" + chr2.Begin + " -r " + Resolution + " -p " + prefix;
+                                String ComLine = Opts.Python.Exe() + " " + Opts.OutScriptDir + "/LongCornerDetect.py -i " + prefix + ".2d.matrix" + " -c " + chr1.Chr + ":" + chr1.region.Start + " " + chr2.Chr + ":" + chr2.region.Start + " -r " + Resolution + " -p " + prefix;
                                 Opts.CommandOutFile.Append(ComLine + "\n");
                                 Tools.ExecuteCommandStr(ComLine, new PrintWriter(System.out), new PrintWriter(System.err));
-                                List<String> PointList = FileUtils.readLines(new File(prefix + ".HisD.point"), Charsets.UTF_8);
+                                List<String> PointList = FileUtils.readLines(new File(prefix + ".HisD.point"), StandardCharsets.UTF_8);
                                 for (String point : PointList) {
                                     String[] str = point.split("\\s+");
                                     double p_value = Double.parseDouble(str[8]) + Double.parseDouble(str[9]);
                                     if (p_value < P_Value) {
                                         int[] chr1index = new int[]{Integer.parseInt(str[3]), Integer.parseInt(str[4])};
                                         int[] chr2index = new int[]{Integer.parseInt(str[6]), Integer.parseInt(str[7])};
-                                        ChrRegion region1 = new ChrRegion(new Chromosome(str[2]), chr1index[0], chr1index[1]);
-                                        ChrRegion region2 = new ChrRegion(new Chromosome(str[5]), chr2index[0], chr2index[1]);
+                                        ChrRegion region1 = new ChrRegion((str[2]), chr1index[0], chr1index[1]);
+                                        ChrRegion region2 = new ChrRegion((str[5]), chr2index[0], chr2index[1]);
                                         synchronized (t) {
                                             QList.add(str[10]);
-                                            BreakPointList.add(new BreakPoint("P" + BreakPointList.size(), new ChrRegion(new Chromosome(str[2]), (chr1index[0] + chr1index[1]) / 2, (chr1index[0] + chr1index[1]) / 2 + Resolution), new ChrRegion(new Chromosome(str[5]), (chr2index[0] + chr2index[1]) / 2, (chr2index[0] + chr2index[1]) / 2 + Resolution), p_value, Resolution));
+                                            BreakPointList.add(new BreakPoint("P" + BreakPointList.size(), new ChrRegion((str[2]), (chr1index[0] + chr1index[1]) / 2, (chr1index[0] + chr1index[1]) / 2 + Resolution), new ChrRegion((str[5]), (chr2index[0] + chr2index[1]) / 2, (chr2index[0] + chr2index[1]) / 2 + Resolution), p_value, Resolution));
                                             TransLocationPointList.add(new InterAction(region1, region2));
                                             if (Resolution < 10000) {
                                                 PointResolutionList.add(Resolution);
@@ -339,10 +339,10 @@ public class TransLocationDetection {
                             int[] BreakPointIndex = BreakPointDetection(Matrix, P_Value, Integer.parseInt(Q));
                             double p = CalculatePValue(Matrix, BreakPointIndex, Integer.parseInt(Q));
                             if (p < P_Value) {
-                                BreakPoint breakPoint = new BreakPoint("P" + index, new ChrRegion(new Chromosome(region1.Chr.Name), region1.Begin + BreakPointIndex[0] * Resolution, region1.Begin + (BreakPointIndex[0] + 1) * Resolution), new ChrRegion(new Chromosome(region2.Chr.Name), region2.Begin + BreakPointIndex[1] * Resolution, region2.Begin + (BreakPointIndex[1] + 1) * Resolution), p, Resolution);
+                                BreakPoint breakPoint = new BreakPoint("P" + index, new ChrRegion((region1.Chr), region1.region.Start + BreakPointIndex[0] * Resolution, region1.region.Start + (BreakPointIndex[0] + 1) * Resolution), new ChrRegion((region2.Chr), region2.region.Start + BreakPointIndex[1] * Resolution, region2.region.Start + (BreakPointIndex[1] + 1) * Resolution), p, Resolution);
                                 BreakPointList.set(index, breakPoint);
-                                FileUtils.write(new File(prefix + ".breakpoint"), breakPoint.toString() + "\n", Charsets.UTF_8);
-                                String ComLine = Configure.Python + " " + Opts.ScriptDir + "/RegionPlot.py -i " + prefix + ".2d.matrix -l " + prefix + ".breakpoint -r " + Resolution + " -c " + region1.Chr.Name + ":" + region1.Begin + " " + region2.Chr.Name + ":" + region2.Begin + " -o " + prefix + ".breakpoint.png -t point";
+                                FileUtils.write(new File(prefix + ".breakpoint"), breakPoint.toString() + "\n", StandardCharsets.UTF_8);
+                                String ComLine = Opts.Python.Exe() + " " + Opts.OutScriptDir + "/RegionPlot.py -i " + prefix + ".2d.matrix -l " + prefix + ".breakpoint -r " + Resolution + " -c " + region1.Chr + ":" + region1.region.Start + " " + region2.Chr + ":" + region2.region.Start + " -o " + prefix + ".breakpoint.png -t point";
                                 Opts.CommandOutFile.Append(ComLine + "\n");
                                 Tools.ExecuteCommandStr(ComLine, new PrintWriter(System.out), new PrintWriter(System.err));
                             }
@@ -371,8 +371,8 @@ public class TransLocationDetection {
     }
 
     private int AutoResolution(InterAction interAction) {
-        int len1 = interAction.getLeft().Terminal - interAction.getLeft().Begin;
-        int len2 = interAction.getRight().Terminal - interAction.getRight().Begin;
+        int len1 = interAction.getLeft().region.End - interAction.getLeft().region.Start;
+        int len2 = interAction.getRight().region.End - interAction.getRight().region.Start;
         return AutoResolution(len1, len2);
     }
 

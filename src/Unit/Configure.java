@@ -96,19 +96,19 @@ public class Configure {
         for (Require opt : Require.values()) {
             String s = opt + ":\t" + (opt.Value == null ? "" : opt.Value);
             ParameterStr.add(s);
-//            System.out.println(s);
+//            Unit.System.out.println(s);
         }
         ParameterStr.add("======================================================================================");
         for (Optional opt : Optional.values()) {
             String s = opt + ":\t" + (opt.Value == null ? "" : opt.Value);
             ParameterStr.add(s);
-//            System.out.println(opt + ":\t" + (opt.Value == null ? "" : opt.Value));
+//            Unit.System.out.println(opt + ":\t" + (opt.Value == null ? "" : opt.Value));
         }
         ParameterStr.add("======================================================================================");
         for (Advance opt : Advance.values()) {
             String s = opt + ":\t" + (opt.Value == null ? "" : opt.Value);
             ParameterStr.add(s);
-//            System.out.println(opt + ":\t" + (opt.Value == null ? "" : opt.Value));
+//            Unit.System.out.println(opt + ":\t" + (opt.Value == null ? "" : opt.Value));
         }
         return String.join("\n", ParameterStr.toArray(new String[0]));
     }

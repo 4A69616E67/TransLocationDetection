@@ -1,0 +1,14 @@
+<component name="ArtifactManager">
+  <artifact type="jar" build-on-make="true" name="TransLocationDetection:jar">
+    <output-path>$PROJECT_DIR$/out/artifacts/TransLocationDetection_jar</output-path>
+    <root id="archive" name="TransLocationDetection.jar">
+      <element id="module-output" name="TransLocationDetection" />
+      <element id="extracted-dir" path="$PROJECT_DIR$/src/lib/commons-io-2.6.jar" path-in-jar="/" />
+      <element id="extracted-dir" path="$PROJECT_DIR$/src/lib/commons-cli-1.4.jar" path-in-jar="/" />
+      <element id="extracted-dir" path="$PROJECT_DIR$/src/lib/commons-math3-3.6.1.jar" path-in-jar="/" />
+      <element id="directory" name="Script">
+        <element id="dir-copy" path="$PROJECT_DIR$/src/Script" />
+      </element>
+    </root>
+  </artifact>
+</component>

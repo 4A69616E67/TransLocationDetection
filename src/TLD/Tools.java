@@ -1,5 +1,7 @@
 package TLD;
 
+import org.apache.commons.math3.linear.RealMatrix;
+
 import java.io.*;
 import java.util.Date;
 import java.util.HashMap;
@@ -113,5 +115,27 @@ public class Tools {
         ErrThread.join();
         ExitValue = P.waitFor();
         return ExitValue;
+    }
+
+    public static void PrintMatrix(RealMatrix Matrix, File DenseFile, File SpareMatrix) throws IOException {
+        BufferedWriter twodfile = new BufferedWriter(new FileWriter(DenseFile));
+        BufferedWriter sparefile = new BufferedWriter(new FileWriter(SpareMatrix));
+        //打印二维矩阵
+        for (int i = 0; i < Matrix.getRowDimension(); i++) {
+            for (double data : Matrix.getRow(i)) {
+                twodfile.write(data + "\t");
+            }
+            twodfile.write("\n");
+        }
+        //打印稀疏矩阵
+        for (int i = 0; i < Matrix.getRowDimension(); i++) {
+            for (int j = 0; j < Matrix.getColumnDimension(); j++) {
+                if (Matrix.getEntry(i, j) != 0) {
+                    sparefile.write((i + 1) + "\t" + (j + 1) + "\t" + Matrix.getEntry(i, j) + "\n");
+                }
+            }
+        }
+        sparefile.close();
+        twodfile.close();
     }
 }

@@ -1,15 +1,13 @@
 package TLD;
 
-import kotlin.text.Charsets;
-import File.BedpeFile;
-import lib.tool.Statistic;
-import TLD.Tools;
+import File.BedPeFile.*;
 import Unit.*;
 import org.apache.commons.cli.*;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.math3.linear.Array2DRowRealMatrix;
 
 import java.io.*;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.Hashtable;
@@ -75,13 +73,13 @@ public class CreateMatrix {
             }
         }
         String SizeFile = ComLine.hasOption("size") ? ComLine.getOptionValue("size") : null;
-        Resolution = ComLine.hasOption("res") ? Integer.parseInt(ComLine.getOptionValue("res")) : Default.Resolution;
+        Resolution = ComLine.hasOption("res") ? Integer.parseInt(ComLine.getOptionValue("res")) : 100000;
         Prefix = ComLine.hasOption("p") ? ComLine.getOptionValue("p") : BedpeFile.getPath();
         Threads = ComLine.hasOption("t") ? Integer.parseInt(ComLine.getOptionValue("t")) : 1;
         Region1 = ComLine.hasOption("region") ? new ChrRegion(ComLine.getOptionValue("region").split(":")) : null;
         Region2 = ComLine.hasOption("region") && ComLine.getOptionValues("region").length > 1 ? new ChrRegion(ComLine.getOptionValues("region")[1].split(":")) : Region1;
         if (SizeFile != null) {
-            List<String> ChrSizeList = FileUtils.readLines(new File(SizeFile), Charsets.UTF_8);
+            List<String> ChrSizeList = FileUtils.readLines(new File(SizeFile), StandardCharsets.UTF_8);
             if (Chromosomes == null) {
                 Chromosomes = new Chromosome[ChrSizeList.size()];
                 for (int i = 0; i < Chromosomes.length; i++) {
@@ -202,7 +200,7 @@ public class CreateMatrix {
     public Array2DRowRealMatrix Run(ChrRegion reg1, ChrRegion reg2) throws IOException {
         System.out.println(new Date() + "\tBegin to creat interaction matrix " + reg1.toString().replace("\t", ":") + " " + reg2.toString().replace("\t", ":"));
         int[] ChrBinSize;
-        ChrBinSize = Tools.CalculateBinSize(new int[]{reg1.Length, reg2.Length}, Resolution);
+        ChrBinSize = Tools.CalculateBinSize(new int[]{reg1.region.getLength(), reg2.region.getLength()}, Resolution);
         if (Math.max(ChrBinSize[0], ChrBinSize[1]) > Opts.MaxBinNum) {
             System.err.println("Error ! too many bins, there are " + Math.max(ChrBinSize[0], ChrBinSize[1]) + " bins.");
             System.exit(0);
@@ -230,11 +228,11 @@ public class CreateMatrix {
                             ChrRegion right = new ChrRegion(new String[]{str[DataIndex[3]], str[DataIndex[4]], str[DataIndex[5]]});
                             if (left.IsBelong(reg1) && right.IsBelong(reg2)) {
                                 synchronized (InterMatrix) {
-                                    InterMatrix.addToEntry((left.Begin - reg1.Begin) / Resolution, (right.Begin - reg2.Begin) / Resolution, 1);
+                                    InterMatrix.addToEntry((left.region.Start - reg1.region.Start) / Resolution, (right.region.Start - reg2.region.Start) / Resolution, 1);
                                 }
                             } else if (right.IsBelong(reg1) && left.IsBelong(reg2)) {
                                 synchronized (InterMatrix) {
-                                    InterMatrix.addToEntry((right.Begin - reg1.Begin) / Resolution, (left.Begin - reg2.Begin) / Resolution, 1);
+                                    InterMatrix.addToEntry((right.region.Start - reg1.region.Start) / Resolution, (left.region.Start - reg2.region.Start) / Resolution, 1);
                                 }
                             }
                         }
@@ -264,7 +262,7 @@ public class CreateMatrix {
         //初始化矩阵列表
         ArrayList<Array2DRowRealMatrix> MatrixList = new ArrayList<>();
         for (InterAction aList : list) {
-            Array2DRowRealMatrix aMatrix = new Array2DRowRealMatrix((aList.getLeft().Terminal - aList.getLeft().Begin + 1) / Resolution + 1, (aList.getRight().Terminal - aList.getRight().Begin + 1) / Resolution + 1);
+            Array2DRowRealMatrix aMatrix = new Array2DRowRealMatrix((aList.getLeft().region.End - aList.getLeft().region.Start + 1) / Resolution + 1, (aList.getRight().region.End - aList.getRight().region.Start + 1) / Resolution + 1);
             MatrixList.add(aMatrix);
             for (int i = 0; i < aMatrix.getRowDimension(); i++) {
                 for (int j = 0; j < aMatrix.getColumnDimension(); j++) {
@@ -282,7 +280,7 @@ public class CreateMatrix {
                     String Line;
                     String[] Str;
                     try {
-                        int[] DataIndex = IndexParse(BedpeFile);
+                        int[] DataIndex = IndexParse(new BedpeFile(BedpeFile));
                         while ((Line = reader.readLine()) != null) {
                             Str = Line.split("\\s+");
                             ChrRegion left = new ChrRegion(new String[]{Str[DataIndex[0]], Str[DataIndex[1]], Str[DataIndex[2]]});
@@ -290,12 +288,12 @@ public class CreateMatrix {
                             for (int j = 0; j < list.size(); j++) {
                                 if (left.IsBelong(list.get(j).getLeft()) && right.IsBelong(list.get(j).getRight())) {
                                     synchronized (MatrixList.get(j)) {
-                                        MatrixList.get(j).addToEntry(((left.Begin + left.Terminal) / 2 - list.get(j).getLeft().Begin + 1) / Resolution, ((right.Begin + right.Terminal) / 2 - list.get(j).getRight().Begin + 1) / Resolution, 1);
+                                        MatrixList.get(j).addToEntry(((left.region.Start + left.region.End) / 2 - list.get(j).getLeft().region.Start + 1) / Resolution, ((right.region.Start + right.region.End) / 2 - list.get(j).getRight().region.Start + 1) / Resolution, 1);
                                     }
                                     break;
                                 } else if (right.IsBelong(list.get(j).getLeft()) && left.IsBelong(list.get(j).getRight())) {
                                     synchronized (MatrixList.get(j)) {
-                                        MatrixList.get(j).addToEntry(((right.Begin + right.Terminal) / 2 - list.get(j).getLeft().Begin + 1) / Resolution, ((left.Begin + left.Terminal) / 2 - list.get(j).getRight().Begin + 1) / Resolution, 1);
+                                        MatrixList.get(j).addToEntry(((right.region.Start + right.region.End) / 2 - list.get(j).getLeft().region.Start + 1) / Resolution, ((left.region.Start + left.region.End) / 2 - list.get(j).getRight().region.Start + 1) / Resolution, 1);
                                     }
                                     break;
                                 }
@@ -317,7 +315,7 @@ public class CreateMatrix {
         //初始化矩阵列表
         ArrayList<Array2DRowRealMatrix> MatrixList = new ArrayList<>();
         for (int i = 0; i < list.size(); i++) {
-            Array2DRowRealMatrix aMatrix = new Array2DRowRealMatrix((list.get(i).getLeft().Terminal - list.get(i).getLeft().Begin) / Resolution.get(i) + 1, (list.get(i).getRight().Terminal - list.get(i).getRight().Begin) / Resolution.get(i) + 1);
+            Array2DRowRealMatrix aMatrix = new Array2DRowRealMatrix((list.get(i).getLeft().region.End - list.get(i).getLeft().region.Start) / Resolution.get(i) + 1, (list.get(i).getRight().region.End - list.get(i).getRight().region.Start) / Resolution.get(i) + 1);
             MatrixList.add(aMatrix);
             for (int j = 0; j < aMatrix.getRowDimension(); j++) {
                 for (int k = 0; k < aMatrix.getColumnDimension(); k++) {
@@ -335,7 +333,7 @@ public class CreateMatrix {
                     String Line;
                     String[] Str;
                     try {
-                        int[] DataIndex = IndexParse(BedpeFile);
+                        int[] DataIndex = IndexParse(new BedpeFile(BedpeFile));
                         while ((Line = reader.readLine()) != null) {
                             Str = Line.split("\\s+");
                             ChrRegion left = new ChrRegion(new String[]{Str[DataIndex[0]], Str[DataIndex[1]], Str[DataIndex[2]]});
@@ -343,12 +341,12 @@ public class CreateMatrix {
                             for (int j = 0; j < list.size(); j++) {
                                 if (left.IsBelong(list.get(j).getLeft()) && right.IsBelong(list.get(j).getRight())) {
                                     synchronized (MatrixList.get(j)) {
-                                        MatrixList.get(j).addToEntry(((left.Begin + left.Terminal) / 2 - list.get(j).getLeft().Begin) / Resolution.get(j), ((right.Begin + right.Terminal) / 2 - list.get(j).getRight().Begin) / Resolution.get(j), 1);
+                                        MatrixList.get(j).addToEntry(((left.region.Start + left.region.End) / 2 - list.get(j).getLeft().region.Start) / Resolution.get(j), ((right.region.Start + right.region.End) / 2 - list.get(j).getRight().region.Start) / Resolution.get(j), 1);
                                     }
 //                                    break;
                                 } else if (right.IsBelong(list.get(j).getLeft()) && left.IsBelong(list.get(j).getRight())) {
                                     synchronized (MatrixList.get(j)) {
-                                        MatrixList.get(j).addToEntry(((right.Begin + right.Terminal) / 2 - list.get(j).getLeft().Begin) / Resolution.get(j), ((left.Begin + left.Terminal) / 2 - list.get(j).getRight().Begin) / Resolution.get(j), 1);
+                                        MatrixList.get(j).addToEntry(((right.region.Start + right.region.End) / 2 - list.get(j).getLeft().region.Start) / Resolution.get(j), ((left.region.Start + left.region.End) / 2 - list.get(j).getRight().region.Start) / Resolution.get(j), 1);
                                     }
 //                                    break;
                                 }
