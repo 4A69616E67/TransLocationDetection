@@ -83,11 +83,12 @@ public class TransLocationDetection {
         Arguement.addOption(Option.builder("f").required().longOpt("bedpe").hasArg().argName("string").desc("Interaction bedpe file").build());
         Arguement.addOption(Option.builder("minc").hasArg().argName("int").desc("min cluster count").build());
         Arguement.addOption(Option.builder("minl").hasArg().argName("int").desc("min region distant").build());
-        Arguement.addOption(Option.builder("p").hasArg().argName("string").desc("out prefix").build());
+        Arguement.addOption(Argument.PREFIX);
         Arguement.addOption(Option.builder("l").hasArg().argName("int").desc("extend length").build());
-        Arguement.addOption(Option.builder("t").hasArg().argName("int").desc("threads").build());
+        Arguement.addOption(Argument.THREAD);
         Arguement.addOption(Option.builder("s").hasArg().argName("file").desc("chr size file").build());
         Arguement.addOption(Option.builder("ml").hasArg().argName("int").desc("cluster merge length").build());
+        Arguement.addOption(Argument.OUTPATH);
         final String Helpheader = "Version: " + Version;
         final String Helpfooter = "";
         if (args.length == 0) {
@@ -102,25 +103,26 @@ public class TransLocationDetection {
             new HelpFormatter().printHelp("java -cp path/" + Opts.JarFile.getName() + " " + TransLocationDetection.class.getName(), Helpheader, Arguement, Helpfooter, true);
             System.exit(1);
         }
-        ChrRegion chr1 = new ChrRegion("?", 0, 0), chr2 = new ChrRegion("?", 0, 0);
+//        ChrRegion chr1=null, chr2=null;
         if (Comline.hasOption("chr")) {
             String[] s = Comline.getOptionValues("chr");
-            chr1 = new ChrRegion(s[0].split(":")[0], Integer.parseInt(s[0].split(":")[1]), Integer.parseInt(s[0].split(":")[1]));
+            Chr1 = new ChrRegion(s[0].split(":")[0], Integer.parseInt(s[0].split(":")[1]), Integer.parseInt(s[0].split(":")[1]));
             if (s.length > 1) {
-                chr2 = new ChrRegion(s[1].split(":")[0], Integer.parseInt(s[1].split(":")[1]), Integer.parseInt(s[1].split(":")[1]));
+                Chr2 = new ChrRegion(s[1].split(":")[0], Integer.parseInt(s[1].split(":")[1]), Integer.parseInt(s[1].split(":")[1]));
             } else {
-                chr2 = chr1;
+                Chr2 = Chr1;
             }
         }
 //        Resolution = Integer.parseInt(Comline.getOptionValue("r"));
         BedpeFile = new BedpeFile(Comline.getOptionValue("f"));
-        OutPrefix = Comline.hasOption("p") ? Comline.getOptionValue("p") : chr1.Chr + "-" + chr2.Chr;
-        ExtendLength = Comline.hasOption("l") ? Integer.parseInt(Comline.getOptionValue("l")) : ExtendLength;
-        Threads = Comline.hasOption("t") ? Integer.parseInt(Comline.getOptionValue("t")) : 1;
-        ChrSizeFile = Comline.hasOption("s") ? new File(Comline.getOptionValue("s")) : null;
-        MinCount = Comline.hasOption("minc") ? Integer.parseInt(Comline.getOptionValue("minc")) : MinCount;
-        MinRegionLength = Comline.hasOption("minl") ? Integer.parseInt(Comline.getOptionValue("minl")) : MinRegionLength;
-        MergeLength = Comline.hasOption("ml") ? Integer.parseInt(Comline.getOptionValue("ml")) : MergeLength;
+        OutPrefix = Opts.GetStringOpt(Comline, Argument.PREFIX.getOpt(), "test");
+        ExtendLength = Opts.GetIntOpt(Comline, "l", ExtendLength);
+        Threads = Opts.GetIntOpt(Comline, Argument.THREAD.getOpt(), 1);
+        ChrSizeFile = Opts.GetFileOpt(Comline, "s", null);
+        MinCount = Opts.GetIntOpt(Comline, "minc", MinCount);
+        MinRegionLength = Opts.GetIntOpt(Comline, "minl", MinRegionLength);
+        MergeLength = Opts.GetIntOpt(Comline, "ml", MergeLength);
+        OutDir = Opts.GetFileOpt(Comline, Argument.OUTPATH.getOpt(), OutDir);
 //        double[][] data = FileTool.ReadMatrixFile(MatrixFile);
     }
 
@@ -192,7 +194,7 @@ public class TransLocationDetection {
         //-----------------------------------------创建Cluster的矩阵----------------------------------------------------
         System.out.println(new Date() + "\tStart create interaction matrix, list size is " + TransLocationRegionList.size());
         ArrayList<Array2DRowRealMatrix> MatrixList = new CreateMatrix(BedpeFile, Chromosomes, Resolution, null, Threads).Run(TransLocationRegionList, RegionResolutionList);
-        System.out.println(new Date() + "\tEnd create interaction matrix, list size is " + TransLocationRegionList.size());
+        System.out.println(new Date() + "\tEnd create interaction matrix, list size is " + MatrixList.size());
         for (int i = 0; i < TransLocationRegionPrefix.size(); i++) {
             Tools.PrintMatrix(MatrixList.get(i), new File(TransLocationRegionPrefix.get(i) + ".2d.matrix"), new File(TransLocationRegionPrefix.get(i) + ".spare.matrix"));
         }
