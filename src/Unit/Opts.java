@@ -1,6 +1,6 @@
 package Unit;
 
-import File.CommonFile;
+import File.CommonFile.CommonFile;
 import Software.Python;
 import org.apache.commons.cli.CommandLine;
 
@@ -12,6 +12,10 @@ import java.util.Hashtable;
  * Created by snowf on 2019/2/17.
  */
 public class Opts {
+
+    public enum FileFormat{
+        Phred33,Phred64,BedpeRegionFormat,ErrorFormat,EmptyFile
+    }
 
     public static String GetStringOpt(CommandLine commandLine, String opt_string, String default_string) {
         return commandLine.hasOption(opt_string) ? commandLine.getOptionValue(opt_string) : default_string;

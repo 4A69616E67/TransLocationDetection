@@ -2,7 +2,6 @@ package File.SamFile;
 
 import File.AbstractFile;
 import File.BedFile.BedFile;
-import Unit.SortItem;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -33,7 +32,7 @@ public class SamFile extends AbstractFile<SamItem> {
             return null;
         }
         String[] line_split = s[0].split("\\s+");
-        Item = new SamItem(s);
+        Item = new SamItem(line_split);
         Item.SortByName = SortByName;
         return Item;
     }
@@ -43,10 +42,10 @@ public class SamFile extends AbstractFile<SamItem> {
         writer.write(item.toString());
     }
 
-    @Override
-    protected SortItem<SamItem> ExtractSortItem(String[] s) {
-        return null;
-    }
+//    @Override
+//    protected SortItem<SamItem> ExtractSortItem(String[] s) {
+//        return null;
+//    }
 
 
     private static int CalculateFragLength(String s) {
@@ -101,7 +100,7 @@ public class SamFile extends AbstractFile<SamItem> {
         String[] lines;
         reader.mark(1000);
         while ((lines = ReadItemLine()) != null) {
-            if (lines[0].matches("^@.*")) {
+            if (!lines[0].matches("^@.*")) {
                 reader.reset();
                 break;
             }

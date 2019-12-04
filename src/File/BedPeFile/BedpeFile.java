@@ -3,7 +3,7 @@ package File.BedPeFile;
 import File.AbstractFile;
 import File.BedFile.BedFile;
 import File.BedFile.BedItem;
-import File.CommonFile;
+import File.CommonFile.CommonFile;
 import File.GffFile.GffFile;
 import TLD.Tools;
 import Unit.*;
@@ -17,8 +17,8 @@ import java.util.*;
  * Created by snowf on 2019/2/17.
  */
 public class BedpeFile extends AbstractFile<BedpeItem> {
-    private AbstractFile.FileFormat Format = AbstractFile.FileFormat.BedpeRegionFormat;
-    public BedItem.Sort SortBy = BedItem.Sort.Location;
+    private Opts.FileFormat Format = Opts.FileFormat.BedpeRegionFormat;
+//    public BedItem.Sort SortBy = BedItem.Sort.Location;
 
     public static BedpeFile[] Copy(BedpeFile[] files) {
         BedpeFile[] NewFiles = new BedpeFile[files.length];
@@ -45,7 +45,7 @@ public class BedpeFile extends AbstractFile<BedpeItem> {
         if (s != null) {
             String[] ss = s[0].split("\\s+");
             Item = new BedpeItem(ss);
-            Item.SortBy = SortBy;
+//            Item.SortBy = SortBy;
         } else {
             Item = null;
         }
@@ -53,33 +53,12 @@ public class BedpeFile extends AbstractFile<BedpeItem> {
     }
 
     @Override
-    protected SortItem<BedpeItem> ExtractSortItem(String[] s) {
-        BedpeItem Item;
-        if (s == null) {
-            return null;
-        }
-        String[] ls = s[0].split("\\s+");
-        if (SortBy == BedItem.Sort.SeqTitle) {
-            Item = new BedpeItem(ls[3], null, 0, null);
-        } else {
-            InterAction i = new InterAction(ls);
-            Item = new BedpeItem(null, i, 0, null);
-            if (ls.length > 9) {
-                Item.getLocation().getLeft().Orientation = ls[8].charAt(0);
-                Item.getLocation().getRight().Orientation = ls[9].charAt(0);
-            }
-        }
-        Item.SortBy = SortBy;
-        return new SortItem<>(Item);
-    }
-
-    @Override
     public void WriteItem(BedpeItem item) throws IOException {
         writer.write(item.toString());
     }
 
-    public void SplitSortFile(BedpeFile OutFile) throws IOException {
-        int splitItemNum = 5000000;
+    public void SplitSortFile(BedpeFile OutFile, Comparator<BedpeItem> comparator) throws IOException {
+        int splitItemNum = 1000000;
         this.ItemNum = getItemNum();
         if (this.ItemNum > splitItemNum) {
             splitItemNum = (int) Math.ceil(this.ItemNum / Math.ceil((double) this.ItemNum / splitItemNum));
@@ -87,9 +66,9 @@ public class BedpeFile extends AbstractFile<BedpeItem> {
             BedpeFile[] TempSplitSortFile = new BedpeFile[TempSplitFile.size()];
             for (int i = 0; i < TempSplitFile.size(); i++) {
                 TempSplitSortFile[i] = new BedpeFile(TempSplitFile.get(i).getPath() + ".sort");
-                new BedpeFile(TempSplitFile.get(i).getPath()).SortFile(TempSplitSortFile[i]);
+                new BedpeFile(TempSplitFile.get(i).getPath()).SortFile(TempSplitSortFile[i], comparator);
             }
-            OutFile.MergeSortFile(TempSplitSortFile);
+            OutFile.MergeSortFile(TempSplitSortFile, comparator);
             if (Configure.DeBugLevel < 1) {
                 for (int i = 0; i < TempSplitFile.size(); i++) {
                     AbstractFile.delete(TempSplitFile.get(i));
@@ -97,20 +76,20 @@ public class BedpeFile extends AbstractFile<BedpeItem> {
                 }
             }
         } else {
-            this.SortFile(OutFile);
+            this.SortFile(OutFile, comparator);
         }
     }
 
-    public AbstractFile.FileFormat BedpeDetect() throws IOException {//不再支持 BedpePointFormat
+    public Opts.FileFormat BedpeDetect() throws IOException {//不再支持 BedpePointFormat
         BedpeItem Item = null;
         ReadOpen();
         try {
             Item = ReadItem();
         } catch (IndexOutOfBoundsException | NumberFormatException i) {
-            Format = AbstractFile.FileFormat.ErrorFormat;
+            Format = Opts.FileFormat.ErrorFormat;
         }
         if (Item == null) {
-            Format = AbstractFile.FileFormat.EmptyFile;
+            Format = Opts.FileFormat.EmptyFile;
         }
         ReadClose();
         return Format;
@@ -168,15 +147,16 @@ public class BedpeFile extends AbstractFile<BedpeItem> {
             WriteClose();
             return;
         }
+        Comparator<BedItem> location_comparator = new BedItem.LocationComparator();
+        Comparator<BedItem> title_comparator = new BedItem.TitleComparator();
         while (item1 != null && item2 != null) {
-            item1.SortBy = BedItem.Sort.SeqTitle;
-            int res = item1.compareTo(item2);
+            int res = title_comparator.compare(item1, item2);
             if (res == 0) {
-                item1.SortBy = BedItem.Sort.Location;
-                if (item1.compareTo(item2) > 0) {
-                    WriteItemln(item2.ToBedpe(item1));
+//                item1.SortBy = BedItem.Sort.Location;
+                if (location_comparator.compare(item1, item2) > 0) {
+                    WriteItemln(BedItem.ToBedpe(item2, item1));
                 } else {
-                    WriteItemln(item1.ToBedpe(item2));
+                    WriteItemln(BedItem.ToBedpe(item1, item2));
                 }
                 ItemNum++;
                 item1 = file1.ReadItem();
@@ -274,7 +254,7 @@ public class BedpeFile extends AbstractFile<BedpeItem> {
             gffList.get(item.GeneRegion.Chr).add(item);
         }
         for (String key : gffList.keySet()) {
-            Collections.sort(gffList.get(key));
+            gffList.get(key).sort(new Gene.RegionComparator());
         }
         gffFile.ReadClose();
         System.out.println(new Date() + "\tAnnotation begin ......");

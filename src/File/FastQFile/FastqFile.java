@@ -60,16 +60,16 @@ public class FastqFile extends AbstractFile<FastqItem> {
         writer.write(item.toString());
     }
 
-    @Override
-    protected SortItem<FastqItem> ExtractSortItem(String[] s) {
-        if (s == null) {
-            return null;
-        }
-        return new SortItem<>(new FastqItem(s[0]));
-    }
+//    @Override
+//    protected SortItem<FastqItem> ExtractSortItem(String[] s) {
+//        if (s == null) {
+//            return null;
+//        }
+//        return new SortItem<>(new FastqItem(s[0]));
+//    }
 
 
-    public AbstractFile.FileFormat FastqPhred() throws IOException {
+    public Opts.FileFormat FastqPhred() throws IOException {
         FastqItem Item;
         ReadOpen();
         int[] FormatEdge = new int[]{(int) '9', (int) 'K'};
@@ -85,7 +85,7 @@ public class FastqFile extends AbstractFile<FastqItem> {
             }
         }
         ReadClose();
-        return Count[0] >= Count[1] ? AbstractFile.FileFormat.Phred33 : AbstractFile.FileFormat.Phred64;
+        return Count[0] >= Count[1] ? Opts.FileFormat.Phred33 : Opts.FileFormat.Phred64;
     }
 
     public ArrayList<FastqItem> ExtractID(Collection<String> List) throws IOException {

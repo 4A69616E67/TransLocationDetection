@@ -1,6 +1,6 @@
 package Unit.System;
 
-import File.CommonFile;
+import File.CommonFile.CommonFile;
 
 import java.io.BufferedWriter;
 import java.io.IOException;

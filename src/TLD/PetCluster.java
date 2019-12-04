@@ -18,6 +18,7 @@ public class PetCluster {
     float CutOff = 0.2f;
     private int TotalCount;
     private int Threads;
+    public boolean Sort = false;
 
     public PetCluster(BedpeFile bedpefile, String outPrefix, int length, int threads) {
         InFile = bedpefile;
@@ -99,7 +100,7 @@ public class PetCluster {
             for (InterAction a : List) {
                 ChrRegion region1 = a.getLeft();
                 ChrRegion region2 = a.getRight();
-                int count = a.Score == 0 ? 1 : a.Score;
+                int count = a.Score <= 0 ? 1 : a.Score;
                 String key = region1.Chr + "-" + region2.Chr;
                 if (!ChrMatrix.containsKey(key)) {
                     ChrMatrix.put(key, new ArrayList<>());
@@ -128,6 +129,10 @@ public class PetCluster {
                         }
                         String chr1 = chrinter.split("-")[0];
                         String chr2 = chrinter.split("-")[1];
+                        if (Sort) {
+                            System.out.println("Sort interaction: " + chrinter);
+                            ChrMatrix.get(chrinter).sort(new ClusterComparator());
+                        }
                         ArrayList<int[]> cluster = FindCluster(ChrMatrix.get(chrinter));
                         synchronized (t) {
                             for (int[] aCluster : cluster) {
@@ -209,5 +214,29 @@ public class PetCluster {
 
     public Hashtable<Integer, Integer> getCountStat() {
         return CountStat;
+    }
+
+    public static class ClusterComparator implements Comparator<int[]> {
+
+        @Override
+        public int compare(int[] o1, int[] o2) {
+            if (o1[0] == o2[0]) {
+                if (o1[1] == o2[1]) {
+                    if (o1[2] == o2[2]) {
+                        if (o1[3] == o2[3]) {
+                            return 0;
+                        } else {
+                            return o1[3] - o2[3];
+                        }
+                    } else {
+                        return o1[2] - o2[2];
+                    }
+                } else {
+                    return o1[1] - o2[1];
+                }
+            } else {
+                return o1[0] - o2[0];
+            }
+        }
     }
 }

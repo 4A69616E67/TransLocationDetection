@@ -1,6 +1,6 @@
 package File;
 
-import Unit.SortItem;
+import File.CommonFile.CommonFile;
 
 import java.io.*;
 import java.util.*;
@@ -9,10 +9,7 @@ import java.util.zip.GZIPInputStream;
 /**
  * Created by snowf on 2019/2/17.
  */
-public abstract class AbstractFile<E extends Comparable<E>> extends File {
-    public enum FileFormat {
-        ErrorFormat, EmptyFile, BedpePointFormat, BedpeRegionFormat, Phred33, Phred64, ShortReads, LongReads, Undefine
-    }
+public abstract class AbstractFile<E extends AbstractItem> extends File {
     public long ItemNum = 0;
     private boolean Sorted = false;
     private int BufferSize = 1024 * 1024;// default 1M
@@ -162,24 +159,21 @@ public abstract class AbstractFile<E extends Comparable<E>> extends File {
         ItemNum++;
     }
 
-    public void SortFile(AbstractFile OutFile) throws IOException {
+    public void SortFile(AbstractFile OutFile, Comparator<E> comparator) throws IOException {
         System.out.println(new Date() + "\tSort file: " + getName());
         BufferedWriter outfile = OutFile.WriteOpen();
         ItemNum = 0;
         ReadOpen();
-        SortItem<E> sortItem;
-        ArrayList<SortItem<E>> SortList = new ArrayList<>();
-        while ((sortItem = ReadSortItem()) != null) {
-            sortItem.index = (int) ItemNum;
-            SortList.add(sortItem);
+        E Item;
+        ArrayList<E> SortList = new ArrayList<>();
+        while ((Item = ReadItem()) != null) {
+            SortList.add(Item);
             ItemNum++;
         }
-        Collections.sort(SortList);
-        ArrayList<char[]> LinesList = Read();
+        SortList.sort(comparator);
         for (int i = 0; i < SortList.size(); i++) {
-            outfile.write(LinesList.get(SortList.get(i).index));
+            outfile.write(SortList.get(i).toString());
             outfile.write("\n");
-            LinesList.set(SortList.get(i).index, null);//及时去除，减少内存占用
             SortList.set(i, null);//及时去除，减少内存占用
         }
         outfile.close();
@@ -188,26 +182,23 @@ public abstract class AbstractFile<E extends Comparable<E>> extends File {
         System.out.println(new Date() + "\tEnd sort file: " + getName());
     }
 
-    public synchronized void MergeSortFile(AbstractFile<E>[] InFile) throws IOException {
+    public synchronized void MergeSortFile(AbstractFile<E>[] InFile, Comparator<E> comparator) throws IOException {
         ItemNum = 0;
-        String[] Lines;
+        E[] Lines;
         System.out.print(new Date() + "\tMerge ");
         for (File s : InFile) {
             System.out.print(s.getName() + " ");
         }
         System.out.print("to " + getName() + "\n");
         //=========================================================================================
-        LinkedList<SortItem<E>> SortList = new LinkedList<>();
-        ArrayList<String[]> LineList = new ArrayList<>();
+        LinkedList<E> SortList = new LinkedList<>();
         BufferedWriter writer = WriteOpen();
         if (InFile.length == 0) {
             return;
         }
         for (int i = 0; i < InFile.length; i++) {
             InFile[i].ReadOpen();
-            Lines = InFile[i].ReadItemLine();
-            LineList.add(Lines);
-            SortItem<E> item = InFile[i].ExtractSortItem(Lines);
+            E item = InFile[i].ReadItem();
             if (item != null) {
                 item.serial = i;
                 SortList.add(item);
@@ -215,26 +206,24 @@ public abstract class AbstractFile<E extends Comparable<E>> extends File {
                 InFile[i].ReadClose();
             }
         }
-        Collections.sort(SortList);
+        SortList.sort(comparator);
         while (SortList.size() > 0) {
-            SortItem<E> item = SortList.remove(0);
+            E item = SortList.remove(0);
             int serial = item.serial;
-            writer.write(String.join("\n", LineList.get(serial)));
+            writer.write(item.toString());
             writer.write("\n");
             ItemNum++;
-            Lines = InFile[serial].ReadItemLine();
-            LineList.set(serial, Lines);
-            item = InFile[serial].ExtractSortItem(Lines);
+            item = InFile[serial].ReadItem();
             if (item == null) {
                 continue;
             }
             item.serial = serial;
-            Iterator<SortItem<E>> iterator = SortList.iterator();
+            Iterator<E> iterator = SortList.iterator();
             boolean flage = false;
             int i = 0;
             while (iterator.hasNext()) {
-                SortItem<E> item1 = iterator.next();
-                if (item.compareTo(item1) <= 0) {
+                E item1 = iterator.next();
+                if (comparator.compare(item, item1) <= 0) {
                     SortList.add(i, item);
                     flage = true;
                     break;
@@ -324,11 +313,11 @@ public abstract class AbstractFile<E extends Comparable<E>> extends File {
         }
     }
 
-    public SortItem<E> ReadSortItem() throws IOException {
-        return ExtractSortItem(ReadItemLine());
-    }
-
-    protected abstract SortItem<E> ExtractSortItem(String[] s);
+//    public SortItem<E> ReadSortItem() throws IOException {
+//        return ExtractSortItem(ReadItemLine());
+//    }
+//
+//    protected abstract SortItem<E> ExtractSortItem(String[] s);
 
     public long getItemNum() {
         if (ItemNum <= 0) {

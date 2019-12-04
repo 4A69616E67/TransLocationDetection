@@ -1,24 +1,27 @@
 package File.BedFile;
 
 
+import File.AbstractItem;
 import File.BedPeFile.BedpeItem;
 import Unit.ChrRegion;
 import Unit.InterAction;
+
+import java.util.Comparator;
 
 /**
  * Created by snowf on 2019/2/24.
  */
 
-public class BedItem implements Comparable<BedItem> {
+public class BedItem extends AbstractItem {
     private String SeqTitle;
     private ChrRegion Location;
     private int Score;
     public String[] Extends = new String[0];
-    public Sort SortBy = Sort.Location;
-
-    public enum Sort {
-        SeqTitle, Location
-    }
+//    public Sort SortBy = Sort.Location;
+//
+//    public enum Sort {
+//        SeqTitle, Location
+//    }
 
     public BedItem(String[] s) {
         Location = new ChrRegion(s[0], Integer.parseInt(s[1]), Integer.parseInt(s[2]));
@@ -55,28 +58,31 @@ public class BedItem implements Comparable<BedItem> {
     }
 
 
-    /**
-     * default compare by location
-     *
-     * @param o another BedItem
-     */
-    @Override
-    public int compareTo(BedItem o) {
-        if (SortBy == Sort.SeqTitle) {
-            return SeqTitle.compareTo(o.SeqTitle);
-        }
-        return Location.compareTo(o.Location);
-    }
-
-    public BedpeItem ToBedpe(BedItem b) {
-        InterAction r = new InterAction(Location, b.Location);
-        String[] ext = new String[Extends.length + b.Extends.length];
-        System.arraycopy(Extends, 0, ext, 0, Extends.length);
-        System.arraycopy(b.Extends, Extends.length, ext, Extends.length, b.Extends.length);
-        return new BedpeItem(SeqTitle, r, Score, ext);
+    public static BedpeItem ToBedpe(BedItem a, BedItem b) {
+        InterAction r = new InterAction(a.Location, b.Location);
+        String[] ext = new String[a.Extends.length + b.Extends.length];
+        System.arraycopy(a.Extends, 0, ext, 0, a.Extends.length);
+        System.arraycopy(b.Extends, a.Extends.length, ext, a.Extends.length, b.Extends.length);
+        return new BedpeItem(a.SeqTitle, r, a.Score, ext);
     }
 
     public ChrRegion getLocation() {
         return Location;
+    }
+
+    public static class LocationComparator implements Comparator<BedItem> {
+
+        @Override
+        public int compare(BedItem o1, BedItem o2) {
+            return o1.Location.compareTo(o2.Location);
+        }
+    }
+
+    public static class TitleComparator implements Comparator<BedItem> {
+
+        @Override
+        public int compare(BedItem o1, BedItem o2) {
+            return o1.SeqTitle.compareTo(o2.SeqTitle);
+        }
     }
 }

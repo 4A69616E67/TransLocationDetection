@@ -1,7 +1,6 @@
 package File.FastaFile;
 
 import File.AbstractFile;
-import Unit.SortItem;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -24,7 +23,14 @@ public class FastaFile extends AbstractFile<FastaItem> {
         if (s == null) {
             Item = null;
         } else {
-            Item = new FastaItem(s[0]);
+            String title;
+            String[] str = s[0].split("\\s+");
+            if (str[0].equals(">")) {
+                title = str[0] + str[1];
+            } else {
+                title = str[0];
+            }
+            Item = new FastaItem(title.replaceAll("^>\\s*", "").trim());
             for (int i = 1; i < s.length; i++) {
                 Item.Sequence.append(s[i]);
             }
@@ -52,16 +58,16 @@ public class FastaFile extends AbstractFile<FastaItem> {
     }
 
     @Override
-    public void WriteItem(FastaItem item) {
-
+    public void WriteItem(FastaItem item) throws IOException {
+        writer.write(item.toString());
     }
 
-    @Override
-    protected SortItem<FastaItem> ExtractSortItem(String[] s) {
-        if (s == null) {
-            return null;
-        }
-        return new SortItem<>(new FastaItem(s[0]));
-    }
+//    @Override
+//    protected SortItem<FastaItem> ExtractSortItem(String[] s) {
+//        if (s == null) {
+//            return null;
+//        }
+//        return new SortItem<>(new FastaItem(s[0]));
+//    }
 
 }

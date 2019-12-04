@@ -1,9 +1,13 @@
 package File.FastQFile;
 
+import File.AbstractItem;
+
+import java.util.Comparator;
+
 /**
  * Created by snowf on 2019/2/17.
  */
-public class FastqItem implements Comparable<FastqItem> {
+public class FastqItem extends AbstractItem {
     public String Title;
     public String Sequence;
     public String Orientation;
@@ -25,9 +29,17 @@ public class FastqItem implements Comparable<FastqItem> {
         return Title + "\n" + Sequence + "\n" + Orientation + "\n" + Quality;
     }
 
-    @Override
-    public int compareTo(FastqItem o) {
-        return Title.compareTo(o.Title);
+    public static class TitleComparator implements Comparator<FastqItem> {
+
+        @Override
+        public int compare(FastqItem o1, FastqItem o2) {
+            return o1.Title.compareTo(o2.Title);
+        }
     }
+
+//    @Override
+//    public int compareTo(FastqItem o) {
+//        return Title.compareTo(o.Title);
+//    }
 }
 

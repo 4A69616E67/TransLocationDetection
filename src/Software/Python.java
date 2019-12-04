@@ -1,6 +1,6 @@
 package Software;
 
-import File.CommonFile;
+import File.CommonFile.CommonFile;
 import Unit.System.CommandLine;
 
 import java.io.IOException;

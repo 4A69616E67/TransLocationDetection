@@ -1,14 +1,16 @@
 package Unit;
 
+import File.AbstractItem;
 import File.GffFile.GffItem;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 
 /**
  * Created by snowf on 2019/5/4.
  */
 
-public class Gene implements Comparable<Gene> {
+public class Gene extends AbstractItem {
     public String ID;
     public String Name;
     public ChrRegion GeneRegion;
@@ -30,10 +32,18 @@ public class Gene implements Comparable<Gene> {
         this(new GffItem(s));
     }
 
-    @Override
-    public int compareTo(Gene o) {
-        return GeneRegion.compareTo(o.GeneRegion);
+    public static class RegionComparator implements Comparator<Gene> {
+
+        @Override
+        public int compare(Gene o1, Gene o2) {
+            return o1.GeneRegion.compareTo(o2.GeneRegion);
+        }
     }
+
+//    @Override
+//    public int compareTo(Gene o) {
+//        return GeneRegion.compareTo(o.GeneRegion);
+//    }
 
     public static String[] GeneDistance(Gene g, ChrRegion c) {
         int dis;
