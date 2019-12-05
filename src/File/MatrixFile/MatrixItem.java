@@ -24,12 +24,15 @@ public class MatrixItem extends AbstractItem {
     public Array2DRowRealMatrix item;
     public ChrRegion Chr1;
     public ChrRegion Chr2;
+    private int Fold;
+    private double MinValue;
+    private double MaxValue;
 
     public MatrixItem(int rowDimension, int columnDimension) throws NotStrictlyPositiveException {
         item = new Array2DRowRealMatrix(rowDimension, columnDimension);
     }
 
-    public MatrixItem(double[][] matrix){
+    public MatrixItem(double[][] matrix) {
         item = new Array2DRowRealMatrix(matrix);
     }
 
@@ -41,52 +44,90 @@ public class MatrixItem extends AbstractItem {
         }
     }
 
-    public static BufferedImage PlotHeatMap(String Chr1, int StartSite1, String Chr2, int StartSite2, RealMatrix Matrix, int Resolution, float threshold) throws IOException {
-        int MatrixHeight = Matrix.getRowDimension();
-        int MatrixWidth = Matrix.getColumnDimension();
-        int StandardImageSize = 2000;
-        int Marginal = 160;
-        int LegendWidth = 20;
-        int interval = 200;
-        int extend_len = 15;
-        Double MinValue = null, MaxValue = null;
-        AffineTransform affineTransform = new AffineTransform();
-        affineTransform.rotate(-Math.PI / 2, 0, 0);
-        Font t;
-        int Fold;
-        //=======================================================
+    public BufferedImage DrawMatrix(float threshold) {
+        int MatrixHeight = item.getRowDimension();
+        int MatrixWidth = item.getColumnDimension();
         ArrayList<Double> list = new ArrayList<>();
         for (int i = 0; i < MatrixHeight; i++) {
             for (int j = 0; j < MatrixWidth; j++) {
-                list.add(Matrix.getEntry(i, j));
+                list.add(item.getEntry(i, j));
             }
         }
         Collections.sort(list);
-        MinValue = MinValue == null ? list.get(0) : MinValue;
-        MaxValue = MaxValue == null ? list.get(list.size() - 1) : MaxValue;
+        MinValue = list.get(0);
+        MaxValue = list.get(list.size() - 1);
         double ThresholdValue = list.get((int) ((list.size() - 1) * threshold));
         //generate heatmap
         BufferedImage matrix_image = new BufferedImage(MatrixWidth, MatrixHeight, BufferedImage.TYPE_INT_ARGB);
         for (int i = 0; i < MatrixHeight; i++) {
             for (int j = 0; j < MatrixWidth; j++) {
-                double value = Matrix.getEntry(i, j);
+                double value = item.getEntry(i, j);
                 Color c;
                 if (value >= MinValue && value <= MaxValue) {
-                    value = value > ThresholdValue ? ThresholdValue : value;
-                    c = new Color(255, (int) (255 * (1 - value / ThresholdValue)), (int) (255 * (1 - value / ThresholdValue)));
+                    value = Math.min(value, ThresholdValue);
+                    double percent = 1 - value / (ThresholdValue - MinValue);
+                    c = new Color(255, (int) (255 * percent), (int) (255 * percent));
                 } else {
                     c = new Color(255, 255, 255, 0);
                 }
                 matrix_image.setRGB(j, MatrixHeight - 1 - i, c.getRGB());
             }
         }
+        return matrix_image;
+    }
+
+//    public static BufferedImage PlotHeatMap(String Chr1, int StartSite1, String Chr2, int StartSite2, RealMatrix Matrix, int Resolution, float threshold) throws IOException {
+//
+////        ImageIO.write(image, OutFile.getName().substring(OutFile.getName().lastIndexOf('.') + 1), OutFile);
+//    }
+
+    public BufferedImage PlotHeatMap(String Chr1, int StartSite1, String Chr2, int StartSite2, int resolution, float threshold) throws IOException {
+        int MatrixHeight = item.getRowDimension();
+        int MatrixWidth = item.getColumnDimension();
+        int StandardImageSize = 2000;
+        int Marginal = 160;
+        int LegendWidth = 20;
+        int interval = 200;
+        int extend_len = 15;
+//        Double MinValue = null, MaxValue = null;
+        AffineTransform affineTransform = new AffineTransform();
+        affineTransform.rotate(-Math.PI / 2, 0, 0);
+        Font t;
+//        int Fold;
+        //=======================================================
+//        ArrayList<Double> list = new ArrayList<>();
+//        for (int i = 0; i < MatrixHeight; i++) {
+//            for (int j = 0; j < MatrixWidth; j++) {
+//                list.add(item.getEntry(i, j));
+//            }
+//        }
+//        Collections.sort(list);
+//        MinValue = MinValue == null ? list.get(0) : MinValue;
+//        MaxValue = MaxValue == null ? list.get(list.size() - 1) : MaxValue;
+//        double ThresholdValue = list.get((int) ((list.size() - 1) * threshold));
+//        //generate heatmap
+//        BufferedImage matrix_image = new BufferedImage(MatrixWidth, MatrixHeight, BufferedImage.TYPE_INT_ARGB);
+//        for (int i = 0; i < MatrixHeight; i++) {
+//            for (int j = 0; j < MatrixWidth; j++) {
+//                double value = item.getEntry(i, j);
+//                Color c;
+//                if (value >= MinValue && value <= MaxValue) {
+//                    value = Math.min(value, ThresholdValue);
+//                    c = new Color(255, (int) (255 * (1 - value / ThresholdValue)), (int) (255 * (1 - value / ThresholdValue)));
+//                } else {
+//                    c = new Color(255, 255, 255, 0);
+//                }
+//                matrix_image.setRGB(j, MatrixHeight - 1 - i, c.getRGB());
+//            }
+//        }
+        BufferedImage matrix_image = DrawMatrix(threshold);
         //zoom on if the original graphic size is too small
-        Fold = StandardImageSize / MatrixHeight >= StandardImageSize / MatrixWidth ? StandardImageSize / MatrixHeight : StandardImageSize / MatrixWidth;
-        Fold = Fold < 1 ? 1 : Fold;
+        Fold = Math.max(StandardImageSize / MatrixHeight, StandardImageSize / MatrixWidth);
+        Fold = Math.max(Fold, 1);
         //calculate new figure size
         MatrixHeight = MatrixHeight * Fold;
         MatrixWidth = MatrixWidth * Fold;
-        Resolution = Resolution / Fold;//correct resolution,
+        resolution = resolution / Fold;//correct resolution,
         BufferedImage image = new BufferedImage(MatrixWidth + Marginal * 2, MatrixHeight + Marginal * 2, BufferedImage.TYPE_INT_ARGB);
         Graphics2D graphics = image.createGraphics();
         //set transparent background
@@ -106,7 +147,7 @@ public class MatrixItem extends AbstractItem {
         //draw x interval
         for (int i = 0; i <= MatrixWidth / interval; i++) {
             graphics.drawLine(Marginal + i * interval, Marginal + MatrixHeight, Marginal + i * interval, Marginal + MatrixHeight + extend_len);
-            float value = (float) (StartSite2 + i * interval * Resolution) / 1000000;
+            float value = (float) (StartSite2 + i * interval * resolution) / 1000000;
             String value_str;
             if (value == (int) value) {
                 value_str = String.format("%d", (int) (value));
@@ -118,12 +159,13 @@ public class MatrixItem extends AbstractItem {
         }
         //draw sub y interval
         for (int i = 0; i <= MatrixHeight * 10 / interval; i++) {
-            graphics.drawLine(Marginal, Marginal + MatrixHeight - i * interval / 10, Marginal - extend_len / 2, Marginal + MatrixHeight - i * interval / 10);
+            int y1 = Marginal + MatrixHeight - i * interval / 10;
+            graphics.drawLine(Marginal, y1, Marginal - extend_len / 2, y1);
         }
         //draw y interval
         for (int i = 0; i <= MatrixHeight / interval; i++) {
             graphics.drawLine(Marginal, Marginal + MatrixHeight - i * interval, Marginal - extend_len, Marginal + MatrixHeight - i * interval);
-            float value = (float) (StartSite1 + i * interval * Resolution) / 1000000;
+            float value = (float) (StartSite1 + i * interval * resolution) / 1000000;
             String value_str;
             if (value == (int) value) {
                 value_str = String.format("%d", (int) (value));
@@ -139,10 +181,10 @@ public class MatrixItem extends AbstractItem {
         graphics.setPaint(new GradientPaint(Marginal + MatrixWidth + interval, Marginal + MatrixHeight, Color.WHITE, Marginal + MatrixWidth + interval, Marginal, Color.RED));
         graphics.fillRect(Marginal + MatrixWidth + interval, Marginal, LegendWidth, MatrixHeight);
         graphics.setColor(Color.BLACK);
-        int min_value = list.get(0).intValue();
+//        int min_value = list.get(0).intValue();
         for (int i = 0; i <= 10; i++) {
             graphics.drawLine(Marginal + MatrixWidth + interval + LegendWidth, Math.round(Marginal + MatrixHeight - (float) (i) / 10 * MatrixHeight), Marginal + MatrixWidth + interval + LegendWidth + extend_len, Math.round(Marginal + MatrixHeight - (float) (i) / 10 * MatrixHeight));
-            String value_str = String.format("%.1f", min_value + (ThresholdValue - min_value) * (float) (i) / 10);
+            String value_str = String.format("%.1f", MinValue + (MaxValue * threshold - MinValue) * (float) (i) / 10);
             Tools.DrawStringCenter(graphics, value_str, t, Marginal + MatrixWidth + interval + LegendWidth + extend_len + 2 + FontDesignMetrics.getMetrics(t).stringWidth(value_str) / 2, Math.round(Marginal + MatrixHeight - (float) (i) / 10 * MatrixHeight), 0);
         }
         //draw x,y title
@@ -150,14 +192,13 @@ public class MatrixItem extends AbstractItem {
         Tools.DrawStringCenter(graphics, Chr1, t, FontDesignMetrics.getMetrics(t).getHeight() / 2 + 5, Marginal + MatrixHeight / 2, -Math.PI / 2);//draw y title,rotation pi/2 anticlockwise
         Tools.DrawStringCenter(graphics, Chr2, t, Marginal + MatrixWidth / 2, 2 * Marginal + MatrixHeight - 5 - FontDesignMetrics.getMetrics(t).getHeight() / 2, 0);//draw x title
         return image;
-//        ImageIO.write(image, OutFile.getName().substring(OutFile.getName().lastIndexOf('.') + 1), OutFile);
+//        return PlotHeatMap(Chr1, StartSite1, Chr2, StartSite2, item, resolution, threshold);
     }
 
-    public BufferedImage PlotHeatMap(String Chr1, int StartSite1, String Chr2, int StartSite2, int resolution, float threshold) throws IOException {
-        return PlotHeatMap(Chr1, StartSite1, Chr2, StartSite2, item, resolution, threshold);
+    public int getFold() {
+        return Fold;
     }
-
-//    @Override
+    //    @Override
 //    public int compareTo(MatrixItem o) {
 //        return 0;
 //    }

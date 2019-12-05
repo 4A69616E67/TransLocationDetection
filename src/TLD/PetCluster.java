@@ -18,6 +18,7 @@ public class PetCluster {
     float CutOff = 0.2f;
     private int TotalCount;
     private int Threads;
+    private HashMap<String, int[]> ChrMatrixCount = new HashMap<>();
     public boolean Sort = false;
 
     public PetCluster(BedpeFile bedpefile, String outPrefix, int length, int threads) {
@@ -79,6 +80,7 @@ public class PetCluster {
             //---------------------对每两条染色体的交创建一个cluster列表--------------------
             String Line;
             while ((Line = in.readLine()) != null) {
+                InFile.ItemNum++;
                 String[] str = Line.split("\\s+");
                 String chr1 = str[ChrIndex[0]];
                 String chr2 = str[ChrIndex[1]];
@@ -86,6 +88,7 @@ public class PetCluster {
                 int count = 1;
                 if (!ChrMatrix.containsKey(key)) {
                     ChrMatrix.put(key, new ArrayList<>());
+                    ChrMatrixCount.put(key, new int[]{0});
                 }
                 if (str.length >= MaxLength) {
                     try {
@@ -94,6 +97,7 @@ public class PetCluster {
                     }
                 }
                 ChrMatrix.get(key).add(new int[]{Integer.parseInt(str[RegionIndex[0]]) - Length, Integer.parseInt(str[RegionIndex[1]]) + Length, Integer.parseInt(str[RegionIndex[2]]) - Length, Integer.parseInt(str[RegionIndex[3]]) + Length, count});
+                ChrMatrixCount.get(key)[0]++;
             }
             in.close();
         } else if (List.size() > 0) {
@@ -119,18 +123,18 @@ public class PetCluster {
                 @Override
                 public void run() {
                     String chrinter;
-                    while (p.hasNext()) {
+                    while (true) {
                         synchronized (t) {
-                            try {
+                            if (p.hasNext()) {
                                 chrinter = p.next();
-                            } catch (NoSuchElementException e) {
+                            } else {
                                 break;
                             }
                         }
                         String chr1 = chrinter.split("-")[0];
                         String chr2 = chrinter.split("-")[1];
                         if (Sort) {
-                            System.out.println("Sort interaction: " + chrinter);
+//                            System.out.println("Sort interaction: " + chrinter);
                             ChrMatrix.get(chrinter).sort(new ClusterComparator());
                         }
                         ArrayList<int[]> cluster = FindCluster(ChrMatrix.get(chrinter));
@@ -238,5 +242,9 @@ public class PetCluster {
                 return o1[0] - o2[0];
             }
         }
+    }
+
+    public HashMap<String, int[]> getChrMatrixCount() {
+        return ChrMatrixCount;
     }
 }

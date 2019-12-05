@@ -87,6 +87,8 @@ public class TransLocationDetection {
      */
     private File ChrSizeFile;
 
+    private double AverageDensity;
+
     private boolean Sort = false;
 
     /**
@@ -226,39 +228,58 @@ public class TransLocationDetection {
         ArrayList<InterAction> TempInteractionList1 = new ArrayList<>();// a temporary list save the merged interaction pet
         pet.WriteOut();// output the cluster result and statistic information
         System.out.println(new Date() + "\tCluster end, there are " + TempInteractionList.size() + " clusters obtain");
+        //---------------------calculate average density------------------------
+        long ChrSquare = 0;
+        double ChrCount = 0;
+        ArrayList<String> key = new ArrayList<>(Opts.ChrSize.keySet());
+        for (int i = 0; i < key.size() - 1; i++) {
+            for (int j = i + 1; j < key.size(); j++) {
+                ChrSquare += Opts.ChrSize.get(key.get(i)) / 1000 * Opts.ChrSize.get(key.get(j)) / 1000;
+                if (pet.getChrMatrixCount().containsKey(key.get(i) + "-" + key.get(j))) {
+                    ChrCount += pet.getChrMatrixCount().get(key.get(i) + "-" + key.get(j))[0];
+                } else if (pet.getChrMatrixCount().containsKey(key.get(j) + "-" + key.get(i))) {
+                    ChrCount += pet.getChrMatrixCount().get(key.get(j) + "-" + key.get(i))[0];
+                }
+            }
+        }
+        AverageDensity = ChrCount / ChrSquare;
+        System.out.println(new Date() + "\tAverage density is " + ChrCount + "/" + ChrSquare + " = " + AverageDensity + "/kb2");
         //--------------------merge closed cluster----------------------
-        System.out.println(new Date() + "\tMerge Cluster");
+        System.out.println(new Date() + "\tFilter and merge Cluster\t Min size: " + MinRegionLength + "\tMerge length: " + MergeLength);
         //remove the cluster which have low count value
         for (InterAction a : TempInteractionList) {
-            if (a.Score >= MinCount) {
+            ChrRegion chr1 = a.getLeft();
+            ChrRegion chr2 = a.getRight();
+            if ((double) (a.Score) > MinCount && Opts.ChrSize.containsKey(chr1.Chr) && Opts.ChrSize.containsKey(chr2.Chr) && chr1.region.getLength() > MinRegionLength && chr2.region.getLength() > MinRegionLength) {
                 TempInteractionList1.add(a);
             }
         }
+        System.out.println(new Date() + "\t" + TempInteractionList1.size() + " cluster remained after filter");
         TempInteractionList = new PetCluster(TempInteractionList1, MergeLength, Threads).Run();//execute "cluster" again, but the extend length replace to "MergeLength",so that we can merge some closed cluster
-        System.out.println(new Date() + "\tMerge end " + TempInteractionList.size() + " clusters have remained");
+        System.out.println(new Date() + "\tFilter and merge end " + TempInteractionList.size() + " clusters have remained");
         //-------------------------remove the cluster which have low size and prepare the region of used to breakpoint detection------------------------------------
         int order = 0;
-        File ClusterFile = new File(OutDir + "/" + OutPrefix + ".Count_ge_" + MinCount + ".cluster");
+        File ClusterFile = new File(OutDir + "/" + OutPrefix + ".filtered.cluster");
+//        System.out.println(new Date() + "\tRemove low size region: min size is: " + MinRegionLength);
         BufferedWriter writer = new BufferedWriter(new FileWriter(ClusterFile));
-        for (int i = 0; i < TempInteractionList.size(); i++) {
-            InterAction action = TempInteractionList.get(i);
+        for (InterAction action : TempInteractionList) {
             ChrRegion chr1 = action.getLeft();
             ChrRegion chr2 = action.getRight();
             writer.write("region" + order + "\t" + chr1 + "\t" + chr2 + "\t" + action.Score + "\n");//output the final cluster information
             //remove some clusters which size is too small(height or weight less than "MinRegionLength")
-            if (Opts.ChrSize.containsKey(chr1.Chr) && Opts.ChrSize.containsKey(chr2.Chr) && chr1.region.End - chr1.region.Start > MinRegionLength && chr2.region.End - chr2.region.Start > MinRegionLength) {
-                //create a new region which is triple original size
-                TransLocationRegionList.add(new InterAction(new ChrRegion(chr1.Chr, Math.max(0, chr1.region.Start * 2 - chr1.region.End), Math.min(chr1.region.End * 2 - chr1.region.Start, Opts.ChrSize.get(chr1.Chr))), new ChrRegion(chr2.Chr, Math.max(0, chr2.region.Start * 2 - chr2.region.End), Math.min(chr2.region.End * 2 - chr2.region.Start, Opts.ChrSize.get(chr2.Chr))), action.Score));
-                //establish corresponding resolution value, resolution will be calculated automatically to ensure the number of bin would large than 20 and less than 200
-                RegionResolutionList.add(AutoResolution(TransLocationRegionList.get(TransLocationRegionList.size() - 1)));
-                new File(OutDir + "/" + chr1.Chr + "-" + chr2.Chr).mkdirs();
-                ChrMatrixPrefix.put(OutDir + "/" + chr1.Chr + "-" + chr2.Chr + "/" + OutPrefix + "." + chr1.Chr + "-" + chr2.Chr, new String[]{chr1.Chr, chr2.Chr});
-                TransLocationRegionPrefix.add(OutDir + "/" + chr1.Chr + "-" + chr2.Chr + "/" + OutPrefix + ".r" + order + "." + Tools.UnitTrans(RegionResolutionList.get(RegionResolutionList.size() - 1), "b", "k") + "k");
-            }
+//            if (Opts.ChrSize.containsKey(chr1.Chr) && Opts.ChrSize.containsKey(chr2.Chr) && chr1.region.getLength() > MinRegionLength && chr2.region.getLength() > MinRegionLength) {
+            //create a new region which is triple original size
+            TransLocationRegionList.add(new InterAction(new ChrRegion(chr1.Chr, Math.max(0, chr1.region.Start * 2 - chr1.region.End), Math.min(chr1.region.End * 2 - chr1.region.Start, Opts.ChrSize.get(chr1.Chr))), new ChrRegion(chr2.Chr, Math.max(0, chr2.region.Start * 2 - chr2.region.End), Math.min(chr2.region.End * 2 - chr2.region.Start, Opts.ChrSize.get(chr2.Chr))), action.Score));
+            //establish corresponding resolution value, resolution will be calculated automatically to ensure the number of bin would large than 20 and less than 200
+            RegionResolutionList.add(AutoResolution(TransLocationRegionList.get(TransLocationRegionList.size() - 1)));
+            new File(OutDir + "/" + chr1.Chr + "-" + chr2.Chr).mkdirs();
+            ChrMatrixPrefix.put(OutDir + "/" + chr1.Chr + "-" + chr2.Chr + "/" + OutPrefix + "." + chr1.Chr + "-" + chr2.Chr, new String[]{chr1.Chr, chr2.Chr});
+            TransLocationRegionPrefix.add(OutDir + "/" + chr1.Chr + "-" + chr2.Chr + "/" + OutPrefix + ".r" + order + "." + Tools.UnitTrans(RegionResolutionList.get(RegionResolutionList.size() - 1), "b", "k") + "k");
+//            }
             order++;
         }
         writer.close();
-        System.out.println(new Date() + "\tEnd Cluster, Cluster number=" + TransLocationRegionList.size());
+//        System.out.println(new Date() + "\tEnd Cluster, Cluster number=" + TransLocationRegionList.size());
         //-----------------------------------------创建Cluster的矩阵----------------------------------------------------
         System.out.println(new Date() + "\tStart create interaction matrix, list size is " + TransLocationRegionList.size());
         ArrayList<Array2DRowRealMatrix> MatrixList = new CreateMatrix(BedpeFile, Chromosomes, Resolution, null, Threads).Run(TransLocationRegionList, RegionResolutionList);
@@ -412,21 +433,21 @@ public class TransLocationDetection {
                             MatrixItem item = new MatrixItem(Matrix.getData());
                             BufferedImage image = item.PlotHeatMap(region1.Chr, region1.region.Start, region2.Chr, region2.region.Start, Resolution, 1.0f);
                             int[] BreakPointIndex = BreakPointDetection(Matrix, P_Value, Integer.parseInt(Q));
-                            Graphics2D graphics = image.createGraphics();
-                            graphics.setColor(Color.BLUE);
-                            graphics.setBackground(Color.BLUE);
-                            graphics.fillOval(BreakPointIndex[1] + 160, Matrix.getRowDimension() - BreakPointIndex[0] + 160, 3, 3);
-                            ImageIO.write(image, "png", new File(prefix + ".breakpoint.ori.png"));
+                            DrawBreakPoint(image, item, BreakPointIndex);
+//                            ImageIO.write(image, "png", new File(prefix + ".breakpoint.ori.png"));
                             double p = CalculatePValue(Matrix, BreakPointIndex, Integer.parseInt(Q));
                             if (p < P_Value) {
                                 BreakPoint breakPoint = new BreakPoint("P" + index, new ChrRegion((region1.Chr), region1.region.Start + BreakPointIndex[0] * Resolution, region1.region.Start + (BreakPointIndex[0] + 1) * Resolution), new ChrRegion((region2.Chr), region2.region.Start + BreakPointIndex[1] * Resolution, region2.region.Start + (BreakPointIndex[1] + 1) * Resolution), p, Resolution);
                                 BreakPointList.set(index, breakPoint);
                                 FileUtils.write(new File(prefix + ".breakpoint"), breakPoint.toString() + "\n", StandardCharsets.UTF_8);
-                                String ComLine = Opts.Python.Exe() + " " + Opts.OutScriptDir + "/RegionPlot.py -i " + prefix + ".2d.matrix -l " + prefix + ".breakpoint -r " + Resolution + " -c " + region1.Chr + ":" + region1.region.Start + " " + region2.Chr + ":" + region2.region.Start + " -o " + prefix + ".breakpoint.png -t point";
-                                Opts.CommandOutFile.Append(ComLine + "\n");
-                                Tools.ExecuteCommandStr(ComLine, new PrintWriter(System.out), new PrintWriter(System.err));
+//                                String ComLine = Opts.Python.Exe() + " " + Opts.OutScriptDir + "/RegionPlot.py -i " + prefix + ".2d.matrix -l " + prefix + ".breakpoint -r " + Resolution + " -c " + region1.Chr + ":" + region1.region.Start + " " + region2.Chr + ":" + region2.region.Start + " -o " + prefix + ".breakpoint.png -t point";
+//                                Opts.CommandOutFile.Append(ComLine + "\n");
+//                                Tools.ExecuteCommandStr(ComLine, new PrintWriter(System.out), new PrintWriter(System.err));
+                                ImageIO.write(image, "png", new File(prefix + ".breakpoint.png"));
+                            } else {
+                                ImageIO.write(image, "png", new File(prefix + ".ori.png"));
                             }
-                        } catch (IOException | InterruptedException e) {
+                        } catch (IOException e) {
                             e.printStackTrace();
                         }
                     }
@@ -655,6 +676,27 @@ public class TransLocationDetection {
             }
         }
         return PointList1;
+    }
+
+    private void DrawBreakPoint(BufferedImage image, MatrixItem item, int[] point_index) {
+        int Marginal = 160;
+        int Fold = item.getFold();
+        int matrix_height = item.item.getRowDimension() * Fold;
+        int matrix_width = item.item.getColumnDimension() * Fold;
+//        int Fold = Math.max((image.getHeight() - Marginal * 2) / item.item.getRowDimension(), 1);
+        int[] index = new int[point_index.length];
+        for (int i = 0; i < point_index.length; i++) {
+            index[i] = point_index[i] * Fold;
+        }
+        Graphics2D graphics = image.createGraphics();
+        graphics.setColor(Color.GREEN);
+        graphics.setStroke(new BasicStroke(2.0f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER));
+        graphics.drawLine(Marginal, matrix_height - index[0] + Marginal, matrix_width + Marginal, matrix_height - index[0] + Marginal);
+        graphics.drawLine(Marginal + index[1], Marginal, index[1] + Marginal, matrix_height + Marginal);
+        graphics.setColor(Color.BLUE);
+        graphics.setBackground(Color.BLUE);
+        int r = 6;
+        graphics.fillOval(index[1] + Marginal - r / 2, matrix_height - index[0] + Marginal - r / 2, r, r);
     }
 
 }
