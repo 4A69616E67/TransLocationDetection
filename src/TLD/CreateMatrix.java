@@ -212,6 +212,7 @@ public class CreateMatrix {
             }
         }
         BufferedReader infile = new BufferedReader(new FileReader(BedpeFile));
+        int[] DataIndex = IndexParse(BedpeFile);
         Thread[] Process = new Thread[Threads];
         //----------------------------------------------------------------------------
         for (int i = 0; i < Threads; i++) {
@@ -221,7 +222,6 @@ public class CreateMatrix {
                     try {
                         String line;
                         String[] str;
-                        int[] DataIndex = IndexParse(BedpeFile);
                         while ((line = infile.readLine()) != null) {
                             str = line.split("\\s+");
                             ChrRegion left = new ChrRegion(new String[]{str[DataIndex[0]], str[DataIndex[1]], str[DataIndex[2]]});
@@ -315,7 +315,7 @@ public class CreateMatrix {
         //初始化矩阵列表
         ArrayList<Array2DRowRealMatrix> MatrixList = new ArrayList<>();
         for (int i = 0; i < list.size(); i++) {
-            Array2DRowRealMatrix aMatrix = new Array2DRowRealMatrix((list.get(i).getLeft().region.End - list.get(i).getLeft().region.Start) / Resolution.get(i) + 1, (list.get(i).getRight().region.End - list.get(i).getRight().region.Start) / Resolution.get(i) + 1);
+            Array2DRowRealMatrix aMatrix = new Array2DRowRealMatrix(list.get(i).getLeft().region.getLength() / Resolution.get(i) + 1, list.get(i).getRight().region.getLength() / Resolution.get(i) + 1);
             MatrixList.add(aMatrix);
             for (int j = 0; j < aMatrix.getRowDimension(); j++) {
                 for (int k = 0; k < aMatrix.getColumnDimension(); k++) {

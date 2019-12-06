@@ -27,6 +27,7 @@ public class MatrixItem extends AbstractItem {
     private int Fold;
     private double MinValue;
     private double MaxValue;
+    private int Marginal = 160;
 
     public MatrixItem(int rowDimension, int columnDimension) throws NotStrictlyPositiveException {
         item = new Array2DRowRealMatrix(rowDimension, columnDimension);
@@ -85,7 +86,7 @@ public class MatrixItem extends AbstractItem {
         int MatrixHeight = item.getRowDimension();
         int MatrixWidth = item.getColumnDimension();
         int StandardImageSize = 2000;
-        int Marginal = 160;
+//        int Marginal = 160;
         int LegendWidth = 20;
         int interval = 200;
         int extend_len = 15;
@@ -93,33 +94,6 @@ public class MatrixItem extends AbstractItem {
         AffineTransform affineTransform = new AffineTransform();
         affineTransform.rotate(-Math.PI / 2, 0, 0);
         Font t;
-//        int Fold;
-        //=======================================================
-//        ArrayList<Double> list = new ArrayList<>();
-//        for (int i = 0; i < MatrixHeight; i++) {
-//            for (int j = 0; j < MatrixWidth; j++) {
-//                list.add(item.getEntry(i, j));
-//            }
-//        }
-//        Collections.sort(list);
-//        MinValue = MinValue == null ? list.get(0) : MinValue;
-//        MaxValue = MaxValue == null ? list.get(list.size() - 1) : MaxValue;
-//        double ThresholdValue = list.get((int) ((list.size() - 1) * threshold));
-//        //generate heatmap
-//        BufferedImage matrix_image = new BufferedImage(MatrixWidth, MatrixHeight, BufferedImage.TYPE_INT_ARGB);
-//        for (int i = 0; i < MatrixHeight; i++) {
-//            for (int j = 0; j < MatrixWidth; j++) {
-//                double value = item.getEntry(i, j);
-//                Color c;
-//                if (value >= MinValue && value <= MaxValue) {
-//                    value = Math.min(value, ThresholdValue);
-//                    c = new Color(255, (int) (255 * (1 - value / ThresholdValue)), (int) (255 * (1 - value / ThresholdValue)));
-//                } else {
-//                    c = new Color(255, 255, 255, 0);
-//                }
-//                matrix_image.setRGB(j, MatrixHeight - 1 - i, c.getRGB());
-//            }
-//        }
         BufferedImage matrix_image = DrawMatrix(threshold);
         //zoom on if the original graphic size is too small
         Fold = Math.max(StandardImageSize / MatrixHeight, StandardImageSize / MatrixWidth);
@@ -198,6 +172,11 @@ public class MatrixItem extends AbstractItem {
     public int getFold() {
         return Fold;
     }
+
+    public int getMarginal() {
+        return Marginal;
+    }
+
     //    @Override
 //    public int compareTo(MatrixItem o) {
 //        return 0;
