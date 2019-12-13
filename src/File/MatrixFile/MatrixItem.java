@@ -29,6 +29,12 @@ public class MatrixItem extends AbstractItem {
     private double MaxValue;
     private int Marginal = 160;
 
+    public MatrixItem(ChrRegion chr1, ChrRegion chr2, double[][] matrix) {
+        this(matrix);
+        Chr1 = chr1;
+        Chr2 = chr2;
+    }
+
     public MatrixItem(int rowDimension, int columnDimension) throws NotStrictlyPositiveException {
         item = new Array2DRowRealMatrix(rowDimension, columnDimension);
     }
@@ -77,12 +83,15 @@ public class MatrixItem extends AbstractItem {
         return matrix_image;
     }
 
-//    public static BufferedImage PlotHeatMap(String Chr1, int StartSite1, String Chr2, int StartSite2, RealMatrix Matrix, int Resolution, float threshold) throws IOException {
+    //    public static BufferedImage PlotHeatMap(String Chr1, int StartSite1, String Chr2, int StartSite2, RealMatrix Matrix, int Resolution, float threshold) throws IOException {
 //
 ////        ImageIO.write(image, OutFile.getName().substring(OutFile.getName().lastIndexOf('.') + 1), OutFile);
 //    }
+    public BufferedImage DrawHeatMap(int resolution, float threshold) {
+        return DrawHeatMap(Chr1.Chr, Chr1.region.Start, Chr2.Chr, Chr2.region.Start, resolution, threshold);
+    }
 
-    public BufferedImage PlotHeatMap(String Chr1, int StartSite1, String Chr2, int StartSite2, int resolution, float threshold) throws IOException {
+    public BufferedImage DrawHeatMap(String Chr1, int StartSite1, String Chr2, int StartSite2, int resolution, float threshold) {
         int MatrixHeight = item.getRowDimension();
         int MatrixWidth = item.getColumnDimension();
         int StandardImageSize = 2000;
