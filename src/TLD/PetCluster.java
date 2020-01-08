@@ -10,7 +10,7 @@ import java.util.*;
 
 public class PetCluster {
     private String OutPrefix;
-    private int Length;
+    private int Length1, Length2;
     private BedpeFile InFile;
     private ArrayList<InterAction> List = new ArrayList<>();
     private ArrayList<InterAction> Cluster = new ArrayList<>();
@@ -21,26 +21,29 @@ public class PetCluster {
     private HashMap<String, int[]> ChrMatrixCount = new HashMap<>();
     public boolean Sort = false;
 
-    public PetCluster(BedpeFile bedpefile, String outPrefix, int length, int threads) {
+    public PetCluster(BedpeFile bedpefile, String outPrefix, int length1, int length2, int threads) {
         InFile = bedpefile;
         OutPrefix = outPrefix;
-        Length = length;
+        Length1 = length1;
+        Length2 = length2;
         Threads = threads;
     }
 
-    public PetCluster(ArrayList<InterAction> list, int length, int threads) {
+    public PetCluster(ArrayList<InterAction> list, int length1, int length2, int threads) {
         List = list;
-        Length = length;
+        Length1 = length1;
+        Length2 = length2;
         Threads = threads;
     }
 
     private PetCluster(String[] args) throws ParseException {
         Options Argument = new Options();
         Argument.addOption(Option.builder("f").argName("file").hasArg().required().desc("[required] bedpe file").build());
-        Argument.addOption(Option.builder("l").argName("int").hasArg().desc("extend length (default 0, should set when interaction site is a point)").build());
+        Argument.addOption(Option.builder("l").argName("int").hasArgs().desc("extend length (default 0, should set when interaction site is a point)").build());
         Argument.addOption(Option.builder("p").longOpt("pre").argName("string").hasArg().desc("out prefix (include path)").build());
         Argument.addOption(Option.builder("t").longOpt("thread").argName("int").hasArg().desc("run threads").build());
         Argument.addOption(Option.builder("c").longOpt("cutoff").argName("float").hasArg().desc("cut off").build());
+        Argument.addOption(Option.builder("sort").hasArg(false).desc("if do sort before pet cluster").build());
         if (args.length == 0) {
             new HelpFormatter().printHelp("java -cp " + Opts.JarFile.getName() + " " + PetCluster.class.getName() + " <-f file> [option]", Argument);
             System.exit(1);
@@ -48,9 +51,16 @@ public class PetCluster {
         CommandLine ComLine = new DefaultParser().parse(Argument, args);
         InFile = new BedpeFile(ComLine.getOptionValue("f"));
         OutPrefix = ComLine.hasOption("p") ? ComLine.getOptionValue("p") : InFile.getPath();
-        Length = ComLine.hasOption("l") ? Integer.parseInt(ComLine.getOptionValue("l")) : 0;
         Threads = ComLine.hasOption("t") ? Integer.parseInt(ComLine.getOptionValue("t")) : 1;
         CutOff = ComLine.hasOption("c") ? Float.parseFloat(ComLine.getOptionValue("c")) : CutOff;
+        Sort = ComLine.hasOption("sort");
+        int[] temp_int = Opts.GetIntOpts(ComLine, "l", new int[]{0, 0});
+        Length1 = temp_int[0];
+        if (temp_int.length >= 2) {
+            Length2 = temp_int[1];
+        } else {
+            Length2 = Length1;
+        }
     }
 
 
@@ -61,6 +71,7 @@ public class PetCluster {
     }
 
     public ArrayList<InterAction> Run() throws IOException {
+//        System.out.println("Length1=" + Length1 + "\tLength2=" + Length2);
         Hashtable<String, ArrayList<int[]>> ChrMatrix = new Hashtable<>();
         if (InFile != null) {
             BufferedReader in = new BufferedReader(new FileReader(InFile));
@@ -82,9 +93,14 @@ public class PetCluster {
             while ((Line = in.readLine()) != null) {
                 InFile.ItemNum++;
                 String[] str = Line.split("\\s+");
-                String chr1 = str[ChrIndex[0]];
-                String chr2 = str[ChrIndex[1]];
-                String key = chr1 + "-" + chr2;
+                ChrRegion Chr1 = new ChrRegion(str[ChrIndex[0]], Integer.parseInt(str[RegionIndex[0]]), Integer.parseInt(str[RegionIndex[1]]));
+                ChrRegion Chr2 = new ChrRegion(str[ChrIndex[1]], Integer.parseInt(str[RegionIndex[2]]), Integer.parseInt(str[RegionIndex[3]]));
+                if (Chr1.compareTo(Chr2) > 0) {
+                    ChrRegion TempRegion = Chr1;
+                    Chr1 = Chr2;
+                    Chr2 = TempRegion;
+                }
+                String key = Chr1.Chr + "-" + Chr2.Chr;
                 int count = 1;
                 if (!ChrMatrix.containsKey(key)) {
                     ChrMatrix.put(key, new ArrayList<>());
@@ -96,7 +112,7 @@ public class PetCluster {
                     } catch (NumberFormatException ignored) {
                     }
                 }
-                ChrMatrix.get(key).add(new int[]{Integer.parseInt(str[RegionIndex[0]]) - Length, Integer.parseInt(str[RegionIndex[1]]) + Length, Integer.parseInt(str[RegionIndex[2]]) - Length, Integer.parseInt(str[RegionIndex[3]]) + Length, count});
+                ChrMatrix.get(key).add(new int[]{Chr1.region.Start - Length1, Chr1.region.End + Length1, Chr2.region.Start - Length2, Chr2.region.End + Length2, count});
                 ChrMatrixCount.get(key)[0]++;
             }
             in.close();
@@ -109,7 +125,7 @@ public class PetCluster {
                 if (!ChrMatrix.containsKey(key)) {
                     ChrMatrix.put(key, new ArrayList<>());
                 }
-                ChrMatrix.get(key).add(new int[]{region1.region.Start - Length, region1.region.End + Length, region2.region.Start - Length, region2.region.End + Length, count});
+                ChrMatrix.get(key).add(new int[]{region1.region.Start - Length1, region1.region.End + Length1, region2.region.Start - Length2, region2.region.End + Length2, count});
             }
         } else {
             return Cluster;
@@ -140,7 +156,7 @@ public class PetCluster {
                         ArrayList<int[]> cluster = FindCluster(ChrMatrix.get(chrinter));
                         synchronized (t) {
                             for (int[] aCluster : cluster) {
-                                Cluster.add(new InterAction(new ChrRegion(chr1, aCluster[0] + Length, aCluster[1] - Length), new ChrRegion(chr2, aCluster[2] + Length, aCluster[3] - Length), aCluster[4]));
+                                Cluster.add(new InterAction(new ChrRegion(chr1, aCluster[0] + Length1, aCluster[1] - Length1), new ChrRegion(chr2, aCluster[2] + Length2, aCluster[3] - Length2), aCluster[4]));
                             }
                         }
                     }

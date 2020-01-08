@@ -2,13 +2,16 @@
 package TLD;
 
 import File.BedPeFile.*;
+import File.MatrixFile.MatrixFile;
 import File.MatrixFile.MatrixItem;
 import Unit.*;
+import com.sun.rowset.internal.Row;
 import org.apache.commons.cli.*;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.math3.linear.Array2DRowRealMatrix;
 import org.apache.commons.math3.linear.RealMatrix;
 import org.apache.commons.math3.stat.StatUtils;
+import org.apache.commons.math3.stat.inference.ChiSquareTest;
 import org.apache.commons.math3.stat.inference.TestUtils;
 
 import javax.imageio.ImageIO;
@@ -65,7 +68,7 @@ public class TransLocationDetection {
     /**
      * The max P-Value of Chi-square, program only remain the breakpoint which Chi-square less than this value
      */
-    private double P_Value = 0.05;//
+    private double P_Value = 5e-5;//
     /**
      * The version of this program
      */
@@ -103,8 +106,17 @@ public class TransLocationDetection {
 //        Unit.System.loadLibrary(Core.NATIVE_LIBRARY_NAME);
 //    }
     public static void main(String[] args) throws ParseException, IOException, InterruptedException {
+//        MatrixFile file = new MatrixFile("test.r10.50.0k-P0.5.0k.2d.matrix");
+//        file.ReadOpen();
+//        MatrixItem item = file.ReadItem();
+//        new TransLocationDetection().BreakPointDetection(item.item, 2);
+
+
         TransLocationDetection Tld = new TransLocationDetection(args);
         Tld.Run();
+    }
+
+    public TransLocationDetection() {
     }
 
     public TransLocationDetection(File outDir, String prefix, BedpeFile bedpefile, Chromosome[] chromosomes, int resolution, int threads) {
@@ -150,6 +162,7 @@ public class TransLocationDetection {
         argument.addOption(Option.builder("s").hasArg().argName("file").desc("chr size file").build());
         argument.addOption(Option.builder("ml").hasArg().argName("int").desc("cluster merge length").build());
         argument.addOption(Option.builder("bd").hasArg().argName("int").desc("min breakpoint distance, if two breakpoints distance less than this value, it will be merged (useless at present)").build());
+        argument.addOption(Option.builder("pv").hasArg().argName("float").desc("P value (default 5e-5)").build());
         argument.addOption(Argument.OUTPATH);
         final String Helpheader = "Version: " + Version;
         final String Helpfooter = "";
@@ -186,6 +199,7 @@ public class TransLocationDetection {
         MergeLength = Opts.GetIntOpt(Comline, "ml", MergeLength);
         BreakpointDis = Opts.GetIntOpt(Comline, "bd", BreakpointDis);
         OutDir = Opts.GetFileOpt(Comline, Argument.OUTPATH.getOpt(), OutDir);
+        P_Value = Opts.GetFloatOpt(Comline, "pv", (float) P_Value);
         Sort = Comline.hasOption("sort");
 //        double[][] data = FileTool.ReadMatrixFile(MatrixFile);
     }
@@ -220,7 +234,7 @@ public class TransLocationDetection {
         ArrayList<String> BreakPointPrefixList = new ArrayList<>();
         Hashtable<String, String[]> ChrMatrixPrefix = new Hashtable<>();
         ArrayList<String> QList = new ArrayList<>();
-        PetCluster pet = new PetCluster(BedpeFile, OutDir + "/" + OutPrefix, ExtendLength, Threads);//create a "PetCluster" class,the interaction which have overlap will be merged
+        PetCluster pet = new PetCluster(BedpeFile, OutDir + "/" + OutPrefix, ExtendLength, ExtendLength, Threads);//create a "PetCluster" class,the interaction which have overlap will be merged
         //-----------------------------------------Cluster--------------------------------------------------------------
         System.out.println(new Date() + "\tStart cluster, ExtendLength=" + ExtendLength + " Threads=" + Threads);
         pet.Sort = Sort;
@@ -256,7 +270,7 @@ public class TransLocationDetection {
             }
         }
         System.out.println(new Date() + "\t" + TempInteractionList1.size() + " cluster remained after filter");
-        TempInteractionList = new PetCluster(TempInteractionList1, MergeLength, Threads).Run();//execute "cluster" again, but the extend length replace to "MergeLength",so that we can merge some closed cluster
+        TempInteractionList = new PetCluster(TempInteractionList1, MergeLength, MergeLength, Threads).Run();//execute "cluster" again, but the extend length replace to "MergeLength",so that we can merge some closed cluster
         System.out.println(new Date() + "\tFilter and merge end " + TempInteractionList.size() + " clusters have remained");
         int order = 0;
         File ClusterFile = new File(OutDir + "/" + OutPrefix + ".filtered.cluster");
@@ -281,13 +295,14 @@ public class TransLocationDetection {
         }
         writer.close();
         ChrMatrix = new CreateMatrix(BedpeFile, Chromosomes, Resolution, null, Threads).Run(temp_chr_interaction_list);
-        //====================================打印矩阵=========================================
         //====================================绘制出所有的cluster区域===========================
         for (int i = 0; i < temp_chr_interaction_list.size(); i++) {
             InterAction action1 = temp_chr_interaction_list.get(i);
             MatrixItem item = new MatrixItem(ChrMatrix.get(i).getData());
+            //----------------------------------------打印矩阵------------------------------------------------
+            Tools.PrintMatrix(item.item, new File(OutDir + "/" + action1.getLeft().Chr + "-" + action1.getRight().Chr + "/" + OutPrefix + "." + action1.getLeft().Chr + "-" + action1.getRight().Chr + ".dense.matrix"), new File(OutDir + "/" + action1.getLeft().Chr + "-" + action1.getRight().Chr + "/" + OutPrefix + "." + action1.getLeft().Chr + "-" + action1.getRight().Chr + ".sparse.matrix"));
             System.out.println(new Date() + "\tDraw cluster in " + action1.getLeft().Chr + "-" + action1.getRight().Chr);
-            BufferedImage image = item.DrawHeatMap(action1.getLeft().Chr, 0, action1.getRight().Chr, 0, Resolution, 0.99f);
+            BufferedImage image = item.DrawHeatMap(action1.getLeft().Chr, 0, action1.getRight().Chr, 0, Resolution, 0.999f);
             for (InterAction action2 : TempInteractionList) {
                 ChrRegion chr1 = action2.getLeft();
                 ChrRegion chr2 = action2.getRight();
@@ -296,7 +311,7 @@ public class TransLocationDetection {
                     DrawRegion(image, item, action_temp);
                 }
             }
-            ImageIO.write(image, "png", new File(OutDir + "/" + action1.getLeft().Chr + "-" + action1.getRight().Chr + "/" + OutPrefix + "." + action1.getLeft().Chr + "-" + action1.getRight().Chr + "cluster.png"));
+            ImageIO.write(image, "png", new File(OutDir + "/" + action1.getLeft().Chr + "-" + action1.getRight().Chr + "/" + OutPrefix + "." + action1.getLeft().Chr + "-" + action1.getRight().Chr + ".cluster.png"));
         }
         ChrMatrix.clear();
         //====================================================================================
@@ -492,13 +507,105 @@ public class TransLocationDetection {
         return (int) 1e7;
     }
 
-    private int[] BreakPointDetection(RealMatrix matrix, int quadrant) {
+    private static int[] BreakPointDetection1(RealMatrix matrix, int quadrant) {
         int[] BreakPointIndex;
         int[] MatrixSize = new int[]{matrix.getRowDimension(), matrix.getColumnDimension()};
         double[] RowSum = new double[MatrixSize[0]], RowVar = new double[MatrixSize[0]];
         double[] ColSum = new double[MatrixSize[0]], ColVar = new double[MatrixSize[0]];
-        int RowExtendLength = MatrixSize[0] / 20 == 0 ? 1 : MatrixSize[0] / 20;
-        int ColExtendLength = MatrixSize[1] / 20 == 0 ? 1 : MatrixSize[1] / 20;
+        //--------------------------------------------------------------------------------
+        double LeftValue = 0, RightValue = 0, BaseNum = 3;
+        double RowMaxValue = 0, RowMaxIndex = 0, RowMinValue = 0, RowMinIndex = 0;
+        double ColMaxValue = 0, ColMaxIndex = 0, ColMinValue = 0, ColMinIndex = 0;
+        //--------------------------------------------------------------------------------
+        for (int i = 0; i < MatrixSize[0]; i++) {
+            RowSum[i] = StatUtils.sum(matrix.getRow(i));
+        }
+        for (int i = 0; i < MatrixSize[1]; i++) {
+            ColSum[i] = StatUtils.sum(matrix.getColumn(i));
+        }
+        //---------------------------------------row---------------------------------
+        for (int i = 0; i < MatrixSize[0]; i++) {
+            int ExtendLength = Math.min(i, MatrixSize[0] - 1 - i);
+            if (ExtendLength <= 0) {
+                RowVar[i] = 0;
+            } else {
+                LeftValue = StatUtils.sum(RowSum, i - ExtendLength, ExtendLength) / ExtendLength;
+                RightValue = StatUtils.sum(RowSum, i + 1, ExtendLength) / ExtendLength;
+                if (LeftValue + RightValue == 0) {
+                    RowVar[i] = 0;
+                } else {
+//                    RowVar[i] = (LeftValue - RightValue) / (LeftValue + BaseNum) / (RightValue + BaseNum) * (RowSum[i]);
+                    RowVar[i] = -Math.log10(new ChiSquareTest().chiSquareTest(new double[]{(LeftValue + RightValue) / 2, (LeftValue + RightValue) / 2}, new long[]{(long) LeftValue, (long) RightValue}));
+                }
+                if (LeftValue < RightValue) {
+                    RowVar[i] = -RowVar[i];
+                }
+            }
+            if (RowVar[i] <= RowMinValue) {
+                RowMinValue = RowVar[i];
+                RowMinIndex = i;
+            }
+            if (RowVar[i] >= RowMaxValue) {
+                RowMaxValue = RowVar[i];
+                RowMaxIndex = i;
+            }
+        }
+        //-----------------------------------------col---------------------------------------
+        for (int j = 0; j < MatrixSize[1]; j++) {
+            int ExtendLength = Math.min(j, MatrixSize[1] - 1 - j);
+            if (ExtendLength <= 0) {
+                ColVar[j] = 0;
+            } else {
+                LeftValue = StatUtils.sum(ColSum, j - ExtendLength, ExtendLength) / ExtendLength;
+                RightValue = StatUtils.sum(ColSum, j + 1, ExtendLength) / ExtendLength;
+                if (LeftValue + RightValue == 0) {
+                    ColVar[j] = 0;
+                } else {
+//                    ColVar[j] = (LeftValue - RightValue) / (LeftValue + BaseNum) / (RightValue + BaseNum) * (RowSum[j]);
+                    ColVar[j] = -Math.log10(new ChiSquareTest().chiSquareTest(new double[]{(LeftValue + RightValue) / 2, (LeftValue + RightValue) / 2}, new long[]{(long) LeftValue, (long) RightValue}));
+                }
+                if (LeftValue < RightValue) {
+                    ColVar[j] = -ColVar[j];
+                }
+            }
+            if (ColVar[j] <= ColMinValue) {
+                ColMinValue = ColVar[j];
+                ColMinIndex = j;
+            }
+            if (ColVar[j] >= ColMaxValue) {
+                ColMaxValue = ColVar[j];
+                ColMaxIndex = j;
+            }
+        }
+
+        switch (quadrant) {
+            case 1:
+                BreakPointIndex = new int[]{(int) RowMaxIndex, (int) ColMinIndex};
+                break;
+            case 2:
+                BreakPointIndex = new int[]{(int) RowMaxIndex, (int) ColMaxIndex};
+                break;
+            case 3:
+                BreakPointIndex = new int[]{(int) RowMinIndex, (int) ColMaxIndex};
+                break;
+            case 4:
+                BreakPointIndex = new int[]{(int) RowMinIndex, (int) ColMinIndex};
+                break;
+            default:
+                throw new NullPointerException();
+        }
+        return BreakPointIndex;
+
+    }
+
+    private int[] BreakPointDetection(RealMatrix matrix, int quadrant) {
+        int[] BreakPointIndex;
+        int interval = 15;
+        int[] MatrixSize = new int[]{matrix.getRowDimension(), matrix.getColumnDimension()};
+        double[] RowSum = new double[MatrixSize[0]], RowVar = new double[MatrixSize[0]];
+        double[] ColSum = new double[MatrixSize[0]], ColVar = new double[MatrixSize[0]];
+        int RowExtendLength = MatrixSize[0] / interval == 0 ? 1 : MatrixSize[0] / interval;
+        int ColExtendLength = MatrixSize[1] / interval == 0 ? 1 : MatrixSize[1] / interval;
         int BaseNum = 3;
         double LeftValue = 0, RightValue = 0;
         double RowMaxValue = 0, RowMaxIndex = 0, RowMinValue = 0, RowMinIndex = 0;
@@ -513,11 +620,13 @@ public class TransLocationDetection {
                 RightValue += RowSum[i];
             }
         }
-        RowVar[RowExtendLength] = (LeftValue - RightValue) / (LeftValue + BaseNum) / (RightValue + BaseNum) * (RowSum[RowExtendLength] + 1);
+        RowVar[RowExtendLength] = CalculateChiSquare(LeftValue, RightValue);
+//        RowVar[RowExtendLength] = (LeftValue - RightValue) / (LeftValue + BaseNum) / (RightValue + BaseNum) * (RowSum[RowExtendLength] + 1);
         for (int i = RowExtendLength + 1; i < MatrixSize[0] - RowExtendLength + 1; i++) {
             LeftValue = LeftValue - RowSum[i - RowExtendLength - 1] + RowSum[i - 1];
             RightValue = RightValue - RowSum[i - 1] + RowSum[i + RowExtendLength - 1];
-            RowVar[i] = (LeftValue - RightValue) / (LeftValue + BaseNum) / (RightValue + BaseNum) * (RowSum[i] + 1);
+            RowVar[i] = CalculateChiSquare(LeftValue, RightValue);
+//            RowVar[i] = (LeftValue - RightValue) / (LeftValue + BaseNum) / (RightValue + BaseNum) * (RowSum[i] + 1);
             if (RowVar[i] > RowMaxValue) {
                 RowMaxValue = RowVar[i];
                 RowMaxIndex = i;
@@ -538,11 +647,13 @@ public class TransLocationDetection {
                 RightValue += ColSum[i];
             }
         }
-        ColVar[ColExtendLength] = (LeftValue - RightValue) / (LeftValue + BaseNum) / (RightValue + BaseNum) * (ColSum[ColExtendLength] + 1);
+        ColVar[ColExtendLength] = CalculateChiSquare(LeftValue, RightValue);
+//        ColVar[ColExtendLength] = (LeftValue - RightValue) / (LeftValue + BaseNum) / (RightValue + BaseNum) * (ColSum[ColExtendLength] + 1);
         for (int i = ColExtendLength + 1; i < MatrixSize[1] - ColExtendLength + 1; i++) {
             LeftValue = LeftValue - ColSum[i - ColExtendLength - 1] + ColSum[i - 1];
             RightValue = RightValue - ColSum[i - 1] + ColSum[i + ColExtendLength - 1];
-            ColVar[i] = (LeftValue - RightValue) / (LeftValue + BaseNum) / (RightValue + BaseNum) * (ColSum[i] + 1);
+            ColVar[i] = CalculateChiSquare(LeftValue, RightValue);
+//            ColVar[i] = (LeftValue - RightValue) / (LeftValue + BaseNum) / (RightValue + BaseNum) * (ColSum[i] + 1);
             if (ColVar[i] > ColMaxValue) {
                 ColMaxValue = ColVar[i];
                 ColMaxIndex = i;
@@ -554,13 +665,13 @@ public class TransLocationDetection {
         //---------------------------------------------------------------
         switch (quadrant) {
             case 1:
-                BreakPointIndex = new int[]{(int) RowMaxIndex, (int) ColMinIndex};
+                BreakPointIndex = new int[]{(int) RowMaxIndex - 1, (int) ColMinIndex};
                 break;
             case 2:
-                BreakPointIndex = new int[]{(int) RowMaxIndex, (int) ColMaxIndex};
+                BreakPointIndex = new int[]{(int) RowMaxIndex - 1, (int) ColMaxIndex - 1};
                 break;
             case 3:
-                BreakPointIndex = new int[]{(int) RowMinIndex, (int) ColMaxIndex};
+                BreakPointIndex = new int[]{(int) RowMinIndex, (int) ColMaxIndex - 1};
                 break;
             case 4:
                 BreakPointIndex = new int[]{(int) RowMinIndex, (int) ColMinIndex};
@@ -571,31 +682,41 @@ public class TransLocationDetection {
         return BreakPointIndex;
     }
 
+    private double CalculateChiSquare(double left, double right) {
+        double value = 0;
+        if (left + right > 0) {
+            value = new ChiSquareTest().chiSquare(new double[]{(left + right) / 2, (left + right) / 2}, new long[]{(long) left, (long) right});
+        }
+        value = left - right < 0 ? -value : value;
+        return value;
+    }
+
     private double[] CalculatePValue(RealMatrix matrix, int[] breakpoint_index) {
         int r = (int) StatUtils.min(new double[]{breakpoint_index[0], breakpoint_index[1], matrix.getRowDimension() - 1 - breakpoint_index[0], matrix.getColumnDimension() - 1 - breakpoint_index[1]});
-        double sum1 = 1, sum2 = 1, sum3 = 1, sum4 = 1;
+        double[] sum = new double[]{1, 1, 1, 1};
         for (int i = breakpoint_index[0] - r; i <= breakpoint_index[0] + r; i++) {
             for (int j = breakpoint_index[1] - r; j <= breakpoint_index[1] + r; j++) {
                 if (i < breakpoint_index[0]) {
                     if (j < breakpoint_index[1]) {
-                        sum2 += matrix.getEntry(i, j);
+                        sum[1] += matrix.getEntry(i, j);
                     } else if (j > breakpoint_index[1]) {
-                        sum1 += matrix.getEntry(i, j);
+                        sum[0] += matrix.getEntry(i, j);
                     }
                 } else if (i > breakpoint_index[0]) {
                     if (j < breakpoint_index[1]) {
-                        sum3 += matrix.getEntry(i, j);
+                        sum[2] += matrix.getEntry(i, j);
                     } else if (j > breakpoint_index[1]) {
-                        sum4 += matrix.getEntry(i, j);
+                        sum[3] += matrix.getEntry(i, j);
                     }
                 }
             }
         }
-        double p1 = TestUtils.chiSquareTest(new double[]{sum1, sum2}, new long[]{(long) (sum1 + sum2) / 2, (long) (sum1 + sum2) / 2});
-        double p2 = TestUtils.chiSquareTest(new double[]{sum2, sum3}, new long[]{(long) (sum2 + sum3) / 2, (long) (sum2 + sum3) / 2});
-        double p3 = TestUtils.chiSquareTest(new double[]{sum3, sum4}, new long[]{(long) (sum3 + sum4) / 2, (long) (sum3 + sum4) / 2});
-        double p4 = TestUtils.chiSquareTest(new double[]{sum4, sum1}, new long[]{(long) (sum4 + sum1) / 2, (long) (sum4 + sum1) / 2});
-        return new double[]{p1, p2, p3, p4};
+        double[] p = new double[sum.length];
+        for (int i = 0; i < p.length; i++) {
+            double sum1 = sum[i % 4], sum2 = sum[(i + 1) % 4];
+            p[i] = TestUtils.chiSquareTest(new double[]{(sum1 + sum2) / 2, (sum1 + sum2) / 2}, new long[]{(long) sum1, (long) sum2});
+        }
+        return p;
     }
 
     private double CalculatePValue(RealMatrix matrix, int[] breakpoint_index, int quadrant) {
@@ -703,5 +824,29 @@ public class TransLocationDetection {
         graphics.setStroke(new BasicStroke(3.0f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER));
         graphics.drawRect(Marginal + chr2.region.Start, Marginal + matrix_height - chr1.region.End, chr2.region.getLength(), chr1.region.getLength());
     }
+
+    private static short[][] FilterLeftTop = new short[][]{
+            new short[]{1, 1, 1, 1, 0, -1, -1, -1, -1},
+            new short[]{1, 1, 1, 1, 0, -1, -1, -1, -1},
+            new short[]{1, 1, 1, 1, 0, -1, -1, -1, -1},
+            new short[]{1, 1, 1, 1, 0, -1, -1, -1, -1},
+            new short[]{0, 0, 0, 0, 0, 0, 0, 0, 0},
+            new short[]{-1, -1, -1, -1, 0, 1, 1, 1, 1},
+            new short[]{-1, -1, -1, -1, 0, 1, 1, 1, 1},
+            new short[]{-1, -1, -1, -1, 0, 1, 1, 1, 1},
+            new short[]{-1, -1, -1, -1, 0, 1, 1, 1, 1}
+    };
+
+    private static short[][] FilterRightTop = new short[][]{
+            new short[]{-1, -1, -1, -1, 0, 1, 1, 1, 1},
+            new short[]{-1, -1, -1, -1, 0, 1, 1, 1, 1},
+            new short[]{-1, -1, -1, -1, 0, 1, 1, 1, 1},
+            new short[]{-1, -1, -1, -1, 0, 1, 1, 1, 1},
+            new short[]{0, 0, 0, 0, 0, 0, 0, 0, 0},
+            new short[]{1, 1, 1, 1, 0, -1, -1, -1, -1},
+            new short[]{1, 1, 1, 1, 0, -1, -1, -1, -1},
+            new short[]{1, 1, 1, 1, 0, -1, -1, -1, -1},
+            new short[]{1, 1, 1, 1, 0, -1, -1, -1, -1}
+    };
 
 }
