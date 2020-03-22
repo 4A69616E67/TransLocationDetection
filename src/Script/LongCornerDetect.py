@@ -77,12 +77,13 @@ for i in range(min([TopNum, CornersNum])):
 topwrite.close()
 Pwrite = open(Prefix + ".HisD.point", "w+")
 Count = 0
+extend_length = 1
 for i in range(min([TopNum, CornersNum])):
     if sum(TopPvalue[i]) < MaxPvalue:
         Count += 1
-        extend_length = 5
-        if Resolution < 10000:
-            extend_length = 30
+#        extend_length = 5
+#        if Resolution < 10000:
+#            extend_length = 30
         Pwrite.write("P" + str(i) + "\t" + str(TopPoint[i, 1]) + "," + str(TopPoint[i, 0]) + "\t" + chr1.Name + "\t" + str(chr1.Start + Resolution * (TopPoint[i, 1]-extend_length)) + "\t" +str(chr1.Start + Resolution * (TopPoint[i, 1]+extend_length)) + "\t" +
                      chr2.Name + "\t" + str(chr2.Start + Resolution * (TopPoint[i, 0]-extend_length)) + "\t"+ str(chr2.Start + Resolution * (TopPoint[i, 0]+extend_length)) + "\t" + str(TopPvalue[i, 0]) + "\t" + str(TopPvalue[i, 1]) + "\t" + str(TopIndex[i] + 1) + "\n")
         ColorImg[TopPoint[i, 1], TopPoint[i, 0]] = [255, 0, 0]
@@ -100,9 +101,9 @@ if Count == 0:
         TopIndex[i], TopPvalue[i] = util.QuickCauCq(OrigHeatmap.Matrix, [TopPoint[i, 1], TopPoint[i, 0]], min(
             [TopPoint[i, 0], TopPoint[i, 1], H - TopPoint[i, 1] - 1, W - TopPoint[i, 0] - 1, 20]))
         if sum(TopPvalue[i]) < MaxPvalue:
-            Pwrite.write("P" + str(i) + "\t" + str(TopPoint[i, 1]) + "," + str(TopPoint[i, 0]) + "\t" + chr1.Name + "\t" + str(chr1.Start + Resolution * (TopPoint[i, 1] - 10)) + "\t" + str(chr1.Start + Resolution * (TopPoint[i, 1] + 10)) + "\t" +
-                         chr2.Name + "\t" + str(chr2.Start + Resolution * (TopPoint[i, 0] - 10)) + "\t" + str(chr2.Start + Resolution * (TopPoint[i, 0] + 10)) + "\t" + str(TopPvalue[i, 0]) + "\t" + str(TopPvalue[i, 1]) + "\t" + str(TopIndex[i] + 1) + "\n")
+            Pwrite.write("P" + str(i) + "\t" + str(TopPoint[i, 1]) + "," + str(TopPoint[i, 0]) + "\t" + chr1.Name + "\t" + str(chr1.Start + Resolution * (TopPoint[i, 1])) + "\t" + str(chr1.Start + Resolution * (TopPoint[i, 1] + extend_length)) + "\t" +
+                         chr2.Name + "\t" + str(chr2.Start + Resolution * (TopPoint[i, 0])) + "\t" + str(chr2.Start + Resolution * (TopPoint[i, 0] + extend_length)) + "\t" + str(TopPvalue[i, 0]) + "\t" + str(TopPvalue[i, 1]) + "\t" + str(TopIndex[i] + 1) + "\n")
             ColorImg[TopPoint[i, 1], TopPoint[i, 0]] = [255, 0, 0]
 Pwrite.close()
 cv2.imwrite(Prefix + ".HisD.Color.png", ColorImg)  # 输出彩色图像
-cv2.imwrite(Prefix + ".HisD.gray.png", GrayImg)  # 输出灰度图像
+#cv2.imwrite(Prefix + ".HisD.gray.png", GrayImg)  # 输出灰度图像

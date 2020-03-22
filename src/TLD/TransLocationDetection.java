@@ -52,7 +52,7 @@ public class TransLocationDetection {
     /**
      * Prefix of output file
      */
-    private String OutPrefix;
+    private String OutPrefix = "out";
     /**
      * Min count value for each anchor, the anchor which count value less than this value will be filtered.
      */
@@ -106,7 +106,7 @@ public class TransLocationDetection {
 //        Unit.System.loadLibrary(Core.NATIVE_LIBRARY_NAME);
 //    }
     public static void main(String[] args) throws ParseException, IOException, InterruptedException {
-//        MatrixFile file = new MatrixFile("test.r10.50.0k-P0.5.0k.2d.matrix");
+//        MatrixFile file = new MatrixFile("test.r10.50.0k-P0.5.0k.dense.matrix");
 //        file.ReadOpen();
 //        MatrixItem item = file.ReadItem();
 //        new TransLocationDetection().BreakPointDetection(item.item, 2);
@@ -149,19 +149,19 @@ public class TransLocationDetection {
 
     private TransLocationDetection(String[] args) throws IOException, InterruptedException {
         Options argument = new Options();
-        argument.addOption(Option.builder("chr").hasArgs().argName("name:start").desc("Chromosome name and region (such as chr1:100)(useless at present)").build());
-        argument.addOption(Option.builder("r").longOpt("res").hasArg().argName("int").desc("Resolution (useless at present)").build());
+//        argument.addOption(Option.builder("chr").hasArgs().argName("name:start").desc("Chromosome name and region (such as chr1:100)(useless at present)").build());
+//        argument.addOption(Option.builder("r").longOpt("res").hasArg().argName("int").desc("Resolution (useless at present)").build());
 //        argument.addOption(Option.builder("m").longOpt("matrix").argName("file").hasArg().desc("Inter action matrix").build());
-        argument.addOption(Option.builder("f").required().longOpt("bedpe").hasArg().argName("string").desc("Interaction bedpe file").build());
-        argument.addOption(Option.builder("minc").hasArg().argName("int").desc("min cluster count").build());
-        argument.addOption(Option.builder("minl").hasArg().argName("int").desc("min region distance").build());
+        argument.addOption(Option.builder("f").required().longOpt("bedpe").hasArg().argName("string").required().desc("Interaction bedpe file").build());
+        argument.addOption(Option.builder("minc").hasArg().argName("int").desc("min cluster count (default 70)").build());
+        argument.addOption(Option.builder("minl").hasArg().argName("int").desc("min region distance (default 5k)").build());
         argument.addOption(Option.builder("sort").hasArg(false).desc("if your input file don't sort before, add this argument").build());
         argument.addOption(Argument.PREFIX);
-        argument.addOption(Option.builder("l").hasArg().argName("int").desc("extend length").build());
+        argument.addOption(Option.builder("l").hasArg().argName("int").desc("extend length (defalut 10k)").build());
         argument.addOption(Argument.THREAD);
-        argument.addOption(Option.builder("s").hasArg().argName("file").desc("chr size file").build());
-        argument.addOption(Option.builder("ml").hasArg().argName("int").desc("cluster merge length").build());
-        argument.addOption(Option.builder("bd").hasArg().argName("int").desc("min breakpoint distance, if two breakpoints distance less than this value, it will be merged (useless at present)").build());
+        argument.addOption(Option.builder("s").hasArg().argName("file").desc("chr size file").required().build());
+        argument.addOption(Option.builder("ml").hasArg().argName("int").desc("cluster merge length (defalut 1M)").build());
+        argument.addOption(Option.builder("bd").hasArg().argName("int").desc("min breakpoint distance, if two breakpoints distance less than this value, it will be merged (defalut 100k)").build());
         argument.addOption(Option.builder("pv").hasArg().argName("float").desc("P value (default 5e-5)").build());
         argument.addOption(Argument.OUTPATH);
         final String Helpheader = "Version: " + Version;
@@ -248,7 +248,7 @@ public class TransLocationDetection {
         ArrayList<String> key = new ArrayList<>(Opts.ChrSize.keySet());
         for (int i = 0; i < key.size() - 1; i++) {
             for (int j = i + 1; j < key.size(); j++) {
-                ChrSquare += Opts.ChrSize.get(key.get(i)) / 1000 * Opts.ChrSize.get(key.get(j)) / 1000;
+                ChrSquare += Opts.ChrSize.get(key.get(i)) / 1000 / 1000 * Opts.ChrSize.get(key.get(j));
                 if (pet.getChrMatrixCount().containsKey(key.get(i) + "-" + key.get(j))) {
                     ChrCount += pet.getChrMatrixCount().get(key.get(i) + "-" + key.get(j))[0];
                 } else if (pet.getChrMatrixCount().containsKey(key.get(j) + "-" + key.get(i))) {
@@ -338,7 +338,7 @@ public class TransLocationDetection {
         ArrayList<Array2DRowRealMatrix> MatrixList = new CreateMatrix(BedpeFile, Chromosomes, Resolution, null, Threads).Run(TransLocationRegionList, RegionResolutionList);
         System.out.println(new Date() + "\tEnd create interaction matrix, list size is " + MatrixList.size());
         for (int i = 0; i < TransLocationRegionPrefix.size(); i++) {
-            Tools.PrintMatrix(MatrixList.get(i), new File(TransLocationRegionPrefix.get(i) + ".2d.matrix"), new File(TransLocationRegionPrefix.get(i) + ".spare.matrix"));
+            Tools.PrintMatrix(MatrixList.get(i), new File(TransLocationRegionPrefix.get(i) + ".dense.matrix"), new File(TransLocationRegionPrefix.get(i) + ".sparse.matrix"));
         }
         //----------------------------------------
         //---------------------------------------------------------------------------------------------
@@ -365,12 +365,13 @@ public class TransLocationDetection {
                             }
                         }
                         try {
-                            if (new File(prefix + ".spare.matrix").length() > 0) {
-                                String ComLine = Opts.Python.Exe() + " " + Opts.OutScriptDir + "/LongCornerDetect.py -i " + prefix + ".2d.matrix" + " -c " + chr1.Chr + ":" + chr1.region.Start + " " + chr2.Chr + ":" + chr2.region.Start + " -r " + Resolution + " -p " + prefix;
+                            if (new File(prefix + ".sparse.matrix").length() > 0) {
+                                String ComLine = Opts.Python.Exe() + " " + Opts.OutScriptDir + "/LongCornerDetect.py -i " + prefix + ".dense.matrix" + " -c " + chr1.Chr + ":" + chr1.region.Start + " " + chr2.Chr + ":" + chr2.region.Start + " -r " + Resolution + " -p " + prefix;
                                 Opts.CommandOutFile.Append(ComLine + "\n");
                                 Tools.ExecuteCommandStr(ComLine, new PrintWriter(System.out), new PrintWriter(System.err));
                                 List<String> PointList = FileUtils.readLines(new File(prefix + ".HisD.point"), StandardCharsets.UTF_8);
                                 //==========================merge breakpoint=============================
+                                System.out.println(new Date() + "\t Merge closed corner points, max distance: " + BreakpointDis);
                                 PointList = BreakpointMerge(PointList);
                                 //=====================================================================================
                                 for (String point : PointList) {
@@ -379,11 +380,15 @@ public class TransLocationDetection {
                                     if (p_value < P_Value) {
                                         int[] chr1index = new int[]{Integer.parseInt(str[3]), Integer.parseInt(str[4])};
                                         int[] chr2index = new int[]{Integer.parseInt(str[6]), Integer.parseInt(str[7])};
-                                        ChrRegion region1 = new ChrRegion((str[2]), chr1index[0], chr1index[1]);
-                                        ChrRegion region2 = new ChrRegion((str[5]), chr2index[0], chr2index[1]);
+                                        int ExtendL = 5;
+                                        if (Resolution < 10000) {
+                                            ExtendL = 40;
+                                        }
+                                        ChrRegion region1 = new ChrRegion((str[2]), chr1index[0] - ExtendL * Resolution, chr1index[1] + ExtendL * Resolution);
+                                        ChrRegion region2 = new ChrRegion((str[5]), chr2index[0] - ExtendL * Resolution, chr2index[1] + ExtendL * Resolution);
                                         synchronized (t) {
                                             QList.add(str[10]);
-                                            BreakPointList.add(new BreakPoint("P" + BreakPointList.size(), new ChrRegion((str[2]), (chr1index[0] + chr1index[1]) / 2, (chr1index[0] + chr1index[1]) / 2 + Resolution), new ChrRegion((str[5]), (chr2index[0] + chr2index[1]) / 2, (chr2index[0] + chr2index[1]) / 2 + Resolution), p_value, Resolution));
+                                            BreakPointList.add(new BreakPoint("P" + BreakPointList.size(), new ChrRegion((str[2]), chr1index[0], chr1index[1] + Resolution), new ChrRegion((str[5]), chr2index[0], chr2index[1] + Resolution), p_value, Resolution));
                                             TransLocationPointList.add(new InterAction(region1, region2));
                                             if (Resolution < 10000) {
                                                 PointResolutionList.add(Resolution);
@@ -409,7 +414,7 @@ public class TransLocationDetection {
         MatrixList = new CreateMatrix(BedpeFile, Chromosomes, 0, null, Threads).Run(TransLocationPointList, PointResolutionList);
         System.out.println(new Date() + "\tEnd create interaction matrix, list size is " + TransLocationPointList.size());
 //        for (int i = 0; i < BreakPointPrefixList.size(); i++) {
-//            Tools.PrintMatrix(MatrixList.get(i), new File(BreakPointPrefixList.get(i) + ".2d.matrix"), new File(BreakPointPrefixList.get(i) + ".spare.matrix"));
+//            Tools.PrintMatrix(MatrixList.get(i), new File(BreakPointPrefixList.get(i) + ".dense.matrix"), new File(BreakPointPrefixList.get(i) + ".sparse.matrix"));
 //        }
         int[] Index = new int[]{-1};
         for (int i = 0; i < t.length; i++) {
@@ -436,7 +441,7 @@ public class TransLocationDetection {
                             Resolution = PointResolutionList.get(index);
                         }
                         try {
-                            Tools.PrintMatrix(Matrix, new File(prefix + ".2d.matrix"), new File(prefix + ".spare.matrix"));
+                            Tools.PrintMatrix(Matrix, new File(prefix + ".dense.matrix"), new File(prefix + ".sparse.matrix"));
                             MatrixItem item = new MatrixItem(Matrix.getData());
                             BufferedImage image = item.DrawHeatMap(region1.Chr, region1.region.Start, region2.Chr, region2.region.Start, Resolution, 1.0f);
                             int[] BreakPointIndex = BreakPointDetection(Matrix, Integer.parseInt(Q));
@@ -447,7 +452,7 @@ public class TransLocationDetection {
                                 BreakPoint breakPoint = new BreakPoint("P" + index, new ChrRegion((region1.Chr), region1.region.Start + BreakPointIndex[0] * Resolution, region1.region.Start + (BreakPointIndex[0] + 1) * Resolution), new ChrRegion((region2.Chr), region2.region.Start + BreakPointIndex[1] * Resolution, region2.region.Start + (BreakPointIndex[1] + 1) * Resolution), p, Resolution);
                                 BreakPointList.set(index, breakPoint);
                                 FileUtils.write(new File(prefix + ".breakpoint"), breakPoint.toString() + "\n", StandardCharsets.UTF_8);
-//                                String ComLine = Opts.Python.Exe() + " " + Opts.OutScriptDir + "/RegionPlot.py -i " + prefix + ".2d.matrix -l " + prefix + ".breakpoint -r " + Resolution + " -c " + region1.Chr + ":" + region1.region.Start + " " + region2.Chr + ":" + region2.region.Start + " -o " + prefix + ".breakpoint.png -t point";
+//                                String ComLine = Opts.Python.Exe() + " " + Opts.OutScriptDir + "/RegionPlot.py -i " + prefix + ".dense.matrix -l " + prefix + ".breakpoint -r " + Resolution + " -c " + region1.Chr + ":" + region1.region.Start + " " + region2.Chr + ":" + region2.region.Start + " -o " + prefix + ".breakpoint.png -t point";
 //                                Opts.CommandOutFile.Append(ComLine + "\n");
 //                                Tools.ExecuteCommandStr(ComLine, new PrintWriter(System.out), new PrintWriter(System.err));
                                 ImageIO.write(image, "png", new File(prefix + ".breakpoint.png"));
@@ -760,9 +765,8 @@ public class TransLocationDetection {
         }
         //--------------------------------------------------------------------------
         int min_k = 0, min_j = 0;
-        double min_dis = BreakpointDis;
         while (true) {
-            min_dis = Double.POSITIVE_INFINITY;
+            double min_dis = Double.POSITIVE_INFINITY;
             for (int j = 0; j < dis_matrix.length; j++) {
                 for (int k = 0; k < dis_matrix.length; k++) {
                     if (dis_matrix[j][k] > 0 && dis_matrix[j][k] < min_dis) {
@@ -799,7 +803,7 @@ public class TransLocationDetection {
 //        int Fold = Math.max((image.getHeight() - Marginal * 2) / item.item.getRowDimension(), 1);
         int[] index = new int[point_index.length];
         for (int i = 0; i < point_index.length; i++) {
-            index[i] = point_index[i] * Fold;
+            index[i] = point_index[i] * Fold + Fold / 2;
         }
         Graphics2D graphics = image.createGraphics();
         graphics.setColor(Color.GREEN);
