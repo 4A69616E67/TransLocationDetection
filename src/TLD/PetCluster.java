@@ -90,6 +90,7 @@ public class PetCluster {
             }
             //---------------------对每两条染色体的交创建一个cluster列表--------------------
             String Line;
+            InFile.ItemNum = 0;
             while ((Line = in.readLine()) != null) {
                 InFile.ItemNum++;
                 String[] str = Line.split("\\s+");

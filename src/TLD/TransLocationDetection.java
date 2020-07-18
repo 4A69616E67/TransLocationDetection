@@ -27,6 +27,7 @@ import java.util.List;
  * @version 1.0
  */
 public class TransLocationDetection {
+    private static int SizeUnit = (int) 1e6;
     private ChrRegion Chr1;
     private ChrRegion Chr2;
     /**
@@ -90,9 +91,9 @@ public class TransLocationDetection {
      */
     private File ChrSizeFile;
 
-    private double AverageDensity;
-
     private boolean Sort = false;
+
+    private long SizeAll = 0;
 
     /**
      * @param args
@@ -106,13 +107,57 @@ public class TransLocationDetection {
 //        Unit.System.loadLibrary(Core.NATIVE_LIBRARY_NAME);
 //    }
     public static void main(String[] args) throws ParseException, IOException, InterruptedException {
-//        MatrixFile file = new MatrixFile("test.r10.50.0k-P0.5.0k.dense.matrix");
-//        file.ReadOpen();
-//        MatrixItem item = file.ReadItem();
-//        new TransLocationDetection().BreakPointDetection(item.item, 2);
+        Options argument = new Options();
+        argument.addOption(Option.builder("f").required().longOpt("bedpe").hasArg().argName("string").required().desc("Interaction bedpe file").build());
+        argument.addOption(Option.builder("minc").hasArg().argName("int").desc("min cluster count (default 70)").build());
+        argument.addOption(Option.builder("minl").hasArg().argName("int").desc("min region distance (default 5k)").build());
+        argument.addOption(Option.builder("sort").hasArg(false).desc("if your input file don't sort before, add this argument").build());
+        argument.addOption(Argument.PREFIX);
+        argument.addOption(Option.builder("l").hasArg().argName("int").desc("extend length (default 10k)").build());
+        argument.addOption(Argument.THREAD);
+        argument.addOption(Option.builder("s").hasArg().argName("file").desc("chr size file").required().build());
+        argument.addOption(Option.builder("ml").hasArg().argName("int").desc("cluster merge length (default 1M)").build());
+        argument.addOption(Option.builder("bd").hasArg().argName("int").desc("min breakpoint distance, if two breakpoints distance less than this value, it will be merged (defalut 100k)").build());
+        argument.addOption(Option.builder("pv").hasArg().argName("float").desc("P value (default 5e-5)").build());
+        argument.addOption(Argument.OUTPATH);
+        final String Helpheader = "Version: " + Version;
+        final String Helpfooter = "";
+        if (args.length == 0) {
+            new HelpFormatter().printHelp("java -cp path/" + Opts.JarFile.getName() + " " + TransLocationDetection.class.getName(), Helpheader, argument, Helpfooter, true);
+            System.exit(1);
+        }
+        CommandLine Comline = null;
+        try {
+            Comline = new DefaultParser().parse(argument, args);
+        } catch (ParseException e) {
+            System.out.println(e.getMessage());
+            new HelpFormatter().printHelp("java -cp path/" + Opts.JarFile.getName() + " " + TransLocationDetection.class.getName(), Helpheader, argument, Helpfooter, true);
+            System.exit(1);
+        }
+        TransLocationDetection Tld = new TransLocationDetection();
+        if (Comline.hasOption("chr")) {
+            String[] s = Comline.getOptionValues("chr");
+            Tld.Chr1 = new ChrRegion(s[0].split(":")[0], Integer.parseInt(s[0].split(":")[1]), Integer.parseInt(s[0].split(":")[1]));
+            if (s.length > 1) {
+                Tld.Chr2 = new ChrRegion(s[1].split(":")[0], Integer.parseInt(s[1].split(":")[1]), Integer.parseInt(s[1].split(":")[1]));
+            } else {
+                Tld.Chr2 = Tld.Chr1;
+            }
+        }
+//        Resolution = Integer.parseInt(Comline.getOptionValue("r"));
+        Tld.BedpeFile = new BedpeFile(Comline.getOptionValue("f"));
+        Tld.OutPrefix = Opts.GetStringOpt(Comline, Argument.PREFIX.getOpt(), "test");
+        Tld.ExtendLength = Opts.GetIntOpt(Comline, "l", Tld.ExtendLength);
+        Tld.Threads = Opts.GetIntOpt(Comline, Argument.THREAD.getOpt(), 1);
+        Tld.ChrSizeFile = Opts.GetFileOpt(Comline, "s", null);
+        Tld.MinCount = Opts.GetIntOpt(Comline, "minc", Tld.MinCount);
+        Tld.MinRegionLength = Opts.GetIntOpt(Comline, "minl", Tld.MinRegionLength);
+        Tld.MergeLength = Opts.GetIntOpt(Comline, "ml", Tld.MergeLength);
+        Tld.BreakpointDis = Opts.GetIntOpt(Comline, "bd", Tld.BreakpointDis);
+        Tld.OutDir = Opts.GetFileOpt(Comline, Argument.OUTPATH.getOpt(), Tld.OutDir);
+        Tld.P_Value = Opts.GetFloatOpt(Comline, "pv", (float) Tld.P_Value);
+        Tld.Sort = Comline.hasOption("sort");
 
-
-        TransLocationDetection Tld = new TransLocationDetection(args);
         Tld.Run();
     }
 
@@ -147,72 +192,16 @@ public class TransLocationDetection {
         this.setResolution(Resolution);
     }
 
-    private TransLocationDetection(String[] args) throws IOException, InterruptedException {
-        Options argument = new Options();
-//        argument.addOption(Option.builder("chr").hasArgs().argName("name:start").desc("Chromosome name and region (such as chr1:100)(useless at present)").build());
-//        argument.addOption(Option.builder("r").longOpt("res").hasArg().argName("int").desc("Resolution (useless at present)").build());
-//        argument.addOption(Option.builder("m").longOpt("matrix").argName("file").hasArg().desc("Inter action matrix").build());
-        argument.addOption(Option.builder("f").required().longOpt("bedpe").hasArg().argName("string").required().desc("Interaction bedpe file").build());
-        argument.addOption(Option.builder("minc").hasArg().argName("int").desc("min cluster count (default 70)").build());
-        argument.addOption(Option.builder("minl").hasArg().argName("int").desc("min region distance (default 5k)").build());
-        argument.addOption(Option.builder("sort").hasArg(false).desc("if your input file don't sort before, add this argument").build());
-        argument.addOption(Argument.PREFIX);
-        argument.addOption(Option.builder("l").hasArg().argName("int").desc("extend length (defalut 10k)").build());
-        argument.addOption(Argument.THREAD);
-        argument.addOption(Option.builder("s").hasArg().argName("file").desc("chr size file").required().build());
-        argument.addOption(Option.builder("ml").hasArg().argName("int").desc("cluster merge length (defalut 1M)").build());
-        argument.addOption(Option.builder("bd").hasArg().argName("int").desc("min breakpoint distance, if two breakpoints distance less than this value, it will be merged (defalut 100k)").build());
-        argument.addOption(Option.builder("pv").hasArg().argName("float").desc("P value (default 5e-5)").build());
-        argument.addOption(Argument.OUTPATH);
-        final String Helpheader = "Version: " + Version;
-        final String Helpfooter = "";
-        if (args.length == 0) {
-            new HelpFormatter().printHelp("java -cp path/" + Opts.JarFile.getName() + " " + TransLocationDetection.class.getName(), Helpheader, argument, Helpfooter, true);
-            System.exit(1);
-        }
-        CommandLine Comline = null;
-        try {
-            Comline = new DefaultParser().parse(argument, args);
-        } catch (ParseException e) {
-            System.out.println(e.getMessage());
-            new HelpFormatter().printHelp("java -cp path/" + Opts.JarFile.getName() + " " + TransLocationDetection.class.getName(), Helpheader, argument, Helpfooter, true);
-            System.exit(1);
-        }
-//        ChrRegion chr1=null, chr2=null;
-        if (Comline.hasOption("chr")) {
-            String[] s = Comline.getOptionValues("chr");
-            Chr1 = new ChrRegion(s[0].split(":")[0], Integer.parseInt(s[0].split(":")[1]), Integer.parseInt(s[0].split(":")[1]));
-            if (s.length > 1) {
-                Chr2 = new ChrRegion(s[1].split(":")[0], Integer.parseInt(s[1].split(":")[1]), Integer.parseInt(s[1].split(":")[1]));
-            } else {
-                Chr2 = Chr1;
-            }
-        }
-//        Resolution = Integer.parseInt(Comline.getOptionValue("r"));
-        BedpeFile = new BedpeFile(Comline.getOptionValue("f"));
-        OutPrefix = Opts.GetStringOpt(Comline, Argument.PREFIX.getOpt(), "test");
-        ExtendLength = Opts.GetIntOpt(Comline, "l", ExtendLength);
-        Threads = Opts.GetIntOpt(Comline, Argument.THREAD.getOpt(), 1);
-        ChrSizeFile = Opts.GetFileOpt(Comline, "s", null);
-        MinCount = Opts.GetIntOpt(Comline, "minc", MinCount);
-        MinRegionLength = Opts.GetIntOpt(Comline, "minl", MinRegionLength);
-        MergeLength = Opts.GetIntOpt(Comline, "ml", MergeLength);
-        BreakpointDis = Opts.GetIntOpt(Comline, "bd", BreakpointDis);
-        OutDir = Opts.GetFileOpt(Comline, Argument.OUTPATH.getOpt(), OutDir);
-        P_Value = Opts.GetFloatOpt(Comline, "pv", (float) P_Value);
-        Sort = Comline.hasOption("sort");
-//        double[][] data = FileTool.ReadMatrixFile(MatrixFile);
-    }
-
     private void Init() throws IOException {
         if (Chromosomes == null && Opts.ChrSize.keySet().size() == 0) {
             if (ChrSizeFile == null || !ChrSizeFile.isFile()) {
                 System.err.println(new Date() + "\tWarning! no chromosome size, there are some matrix won't create");
             } else {
                 Opts.ChrSize = Tools.ExtractChrSize(ChrSizeFile);
-                System.out.println(Opts.ChrSize.toString());
+//                System.out.println(Opts.ChrSize.toString());
             }
         }
+        CalculateSizeAll(Opts.ChrSize);
         if (!OutDir.isDirectory()) {
             OutDir.mkdirs();
         }
@@ -234,47 +223,9 @@ public class TransLocationDetection {
         ArrayList<String> BreakPointPrefixList = new ArrayList<>();
         Hashtable<String, String[]> ChrMatrixPrefix = new Hashtable<>();
         ArrayList<String> QList = new ArrayList<>();
-        PetCluster pet = new PetCluster(BedpeFile, OutDir + "/" + OutPrefix, ExtendLength, ExtendLength, Threads);//create a "PetCluster" class,the interaction which have overlap will be merged
-        //-----------------------------------------Cluster--------------------------------------------------------------
-        System.out.println(new Date() + "\tStart cluster, ExtendLength=" + ExtendLength + " Threads=" + Threads);
-        pet.Sort = Sort;
-        ArrayList<InterAction> TempInteractionList = pet.Run();//execute the "cluster" process
-        ArrayList<InterAction> TempInteractionList1 = new ArrayList<>();// a temporary list save the merged interaction pet
-        pet.WriteOut();// output the cluster result and statistic information
-        System.out.println(new Date() + "\tCluster end, there are " + TempInteractionList.size() + " clusters obtain");
-        //---------------------calculate average density------------------------
-        long ChrSquare = 0;
-        double ChrCount = 0;
-        ArrayList<String> key = new ArrayList<>(Opts.ChrSize.keySet());
-        for (int i = 0; i < key.size() - 1; i++) {
-            for (int j = i + 1; j < key.size(); j++) {
-                ChrSquare += Opts.ChrSize.get(key.get(i)) / 1000 / 1000 * Opts.ChrSize.get(key.get(j));
-                if (pet.getChrMatrixCount().containsKey(key.get(i) + "-" + key.get(j))) {
-                    ChrCount += pet.getChrMatrixCount().get(key.get(i) + "-" + key.get(j))[0];
-                } else if (pet.getChrMatrixCount().containsKey(key.get(j) + "-" + key.get(i))) {
-                    ChrCount += pet.getChrMatrixCount().get(key.get(j) + "-" + key.get(i))[0];
-                }
-            }
-        }
-        AverageDensity = ChrCount / ChrSquare;
-        System.out.println(new Date() + "\tAverage density is " + ChrCount + "/" + ChrSquare + " = " + AverageDensity + "/kb2");
-        //--------------------merge closed cluster----------------------
-        System.out.println(new Date() + "\tFilter and merge Cluster\t Min size: " + MinRegionLength + "\tMerge length: " + MergeLength);
-        //remove the cluster which have low count value
-        for (InterAction a : TempInteractionList) {
-            ChrRegion chr1 = a.getLeft();
-            ChrRegion chr2 = a.getRight();
-            //-------------------------remove the cluster which have low size and prepare the region of used to breakpoint detection------------------------------------
-            if ((double) (a.Score) > MinCount && Opts.ChrSize.containsKey(chr1.Chr) && Opts.ChrSize.containsKey(chr2.Chr) && chr1.region.getLength() > MinRegionLength && chr2.region.getLength() > MinRegionLength) {
-                TempInteractionList1.add(a);
-            }
-        }
-        System.out.println(new Date() + "\t" + TempInteractionList1.size() + " cluster remained after filter");
-        TempInteractionList = new PetCluster(TempInteractionList1, MergeLength, MergeLength, Threads).Run();//execute "cluster" again, but the extend length replace to "MergeLength",so that we can merge some closed cluster
-        System.out.println(new Date() + "\tFilter and merge end " + TempInteractionList.size() + " clusters have remained");
+        ArrayList<InterAction> TempInteractionList = PreProcessing(MinCount);
         int order = 0;
         File ClusterFile = new File(OutDir + "/" + OutPrefix + ".filtered.cluster");
-//        System.out.println(new Date() + "\tRemove low size region: min size is: " + MinRegionLength);
         //====================================构建染色体间的交互矩阵=======================
         BufferedWriter writer = new BufferedWriter(new FileWriter(ClusterFile));
         HashSet<String> temp_set = new HashSet<>();
@@ -287,9 +238,7 @@ public class TransLocationDetection {
             writer.write("region" + order + "\t" + chr1 + "\t" + chr2 + "\t" + action.Score + "\n");//output the final cluster information
             order++;
             if (!temp_set.contains(chr1.Chr + "-" + chr2.Chr) && Opts.ChrSize.containsKey(chr1.Chr) && Opts.ChrSize.containsKey(chr2.Chr)) {
-//                String pre = OutDir + "/" + chr1.Chr + "-" + chr2.Chr + "/" + OutPrefix + "." + chr1.Chr + "-" + chr2.Chr;
                 temp_chr_interaction_list.add(new InterAction(new ChrRegion(chr1.Chr, 0, Opts.ChrSize.get(chr1.Chr)), new ChrRegion(chr2.Chr, 0, Opts.ChrSize.get(chr2.Chr))));
-//                Tools.PrintMatrix(new CreateMatrix(BedpeFile, Chromosomes, Resolution, null, Threads).Run()), new File(pre + ".dense.matrix"), new File(pre + ".sparse.matrix"));
                 temp_set.add(chr1.Chr + "-" + chr2.Chr);
             }
         }
@@ -812,7 +761,7 @@ public class TransLocationDetection {
         graphics.drawLine(Marginal + index[1], Marginal, index[1] + Marginal, matrix_height + Marginal);
         graphics.setColor(Color.BLUE);
         graphics.setBackground(Color.BLUE);
-        int r = 6;
+        int r = 10;
         graphics.fillOval(index[1] + Marginal - r / 2, matrix_height - index[0] + Marginal - r / 2, r, r);
     }
 
@@ -852,5 +801,53 @@ public class TransLocationDetection {
             new short[]{1, 1, 1, 1, 0, -1, -1, -1, -1},
             new short[]{1, 1, 1, 1, 0, -1, -1, -1, -1}
     };
+
+    private ArrayList<InterAction> PreProcessing(int minCount) throws IOException {
+        PetCluster pet = new PetCluster(BedpeFile, OutDir + "/" + OutPrefix, ExtendLength, ExtendLength, Threads);//create a "PetCluster" class,the interaction which have overlap will be merged
+        //-----------------------------------------Cluster--------------------------------------------------------------
+        System.out.println(new Date() + "\tStart cluster, ExtendLength=" + ExtendLength + " Threads=" + Threads);
+        pet.Sort = Sort;
+        ArrayList<InterAction> List = pet.Run();//execute the "cluster" process
+        ArrayList<InterAction> NewList = new ArrayList<>();// a temporary list save the merged interaction pet
+        pet.WriteOut();// output the cluster result and statistic information
+        System.out.println(new Date() + "\tCluster end, there are " + List.size() + " clusters obtain");
+        //--------------------merge closed cluster----------------------
+        System.out.println(new Date() + "\tFilter and merge Cluster\t Min size: " + MinRegionLength + "\tMerge length: " + MergeLength);
+        //remove the cluster which have low count value
+        for (InterAction a : List) {
+            ChrRegion chr1 = a.getLeft();
+            ChrRegion chr2 = a.getRight();
+            //-------------------------remove the cluster which have low size and prepare the region of used to breakpoint detection------------------------------------
+            if ((double) (a.Score) > minCount && Opts.ChrSize.containsKey(chr1.Chr) && Opts.ChrSize.containsKey(chr2.Chr) && chr1.region.getLength() > MinRegionLength && chr2.region.getLength() > MinRegionLength) {
+                NewList.add(a);
+            }
+        }
+        List = new ArrayList<>();
+        System.out.println(new Date() + "\t" + NewList.size() + " cluster remained after filter");
+        System.out.println(new Date() + "\tStart identify significant cluster");
+        float AverageCount = (float) BedpeFile.ItemNum / SizeAll;
+        System.out.println("Reads pair: " + BedpeFile.ItemNum + "\tRef Size: " + SizeAll + "\tAverage count: " + AverageCount);
+        for (int i = 0; i < NewList.size(); i++) {
+            ChrRegion chr1 = NewList.get(i).getLeft();
+            ChrRegion chr2 = NewList.get(i).getRight();
+            float avgCount = (float) NewList.get(i).Score / chr1.region.getLength() * SizeUnit / chr2.region.getLength() * SizeUnit;
+            if (avgCount >= AverageCount * 5) {
+                List.add(NewList.get(i));
+            }
+        }
+        List = new PetCluster(List, MergeLength, MergeLength, Threads).Run();//execute "cluster" again, but the extend length replace to "MergeLength",so that we can merge some closed cluster
+        System.out.println(new Date() + "\t" + List.size() + " clusters remained after merge");
+        return List;
+    }
+
+    private void CalculateSizeAll(Hashtable<String, Integer> chrs) {
+        SizeAll = 0;
+        String[] keys = chrs.keySet().toArray(new String[0]);
+        for (int i = 0; i < keys.length; i++) {
+            for (int j = i + 1; j < keys.length; j++) {
+                SizeAll += (double) chrs.get(keys[i]) / SizeUnit / SizeUnit * chrs.get(keys[j]);
+            }
+        }
+    }
 
 }
