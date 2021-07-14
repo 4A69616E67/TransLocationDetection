@@ -208,7 +208,7 @@ public class TransLocationDetection {
     }
 
     /***
-     * Cluster+ 图像识别算法
+     * Cluster + 图像识别算法
      *
      * @throws IOException
      */
@@ -223,14 +223,15 @@ public class TransLocationDetection {
         ArrayList<String> BreakPointPrefixList = new ArrayList<>();
         Hashtable<String, String[]> ChrMatrixPrefix = new Hashtable<>();
         ArrayList<String> QList = new ArrayList<>();
-        ArrayList<InterAction> TempInteractionList = PreProcessing(MinCount);
+        ArrayList<InterAction> TempInteractionList = PreProcessing(MinCount);//preprocess, remain some large and high count cluster
         int order = 0;
         File ClusterFile = new File(OutDir + "/" + OutPrefix + ".filtered.cluster");
         //====================================构建染色体间的交互矩阵=======================
         BufferedWriter writer = new BufferedWriter(new FileWriter(ClusterFile));
         HashSet<String> temp_set = new HashSet<>();
-        ArrayList<Array2DRowRealMatrix> ChrMatrix;
-        ArrayList<InterAction> temp_chr_interaction_list = new ArrayList<>();
+        ArrayList<Array2DRowRealMatrix> chrMatrixList;//整条染色体间的互作矩阵列表
+        ArrayList<InterAction> temp_chr_interaction_list = new ArrayList<>();//整条染色体间的互作列表
+        //create relate chromosome interaction region
         for (InterAction action : TempInteractionList) {
             ChrRegion chr1 = action.getLeft();
             ChrRegion chr2 = action.getRight();
@@ -243,11 +244,11 @@ public class TransLocationDetection {
             }
         }
         writer.close();
-        ChrMatrix = new CreateMatrix(BedpeFile, Chromosomes, Resolution, null, Threads).Run(temp_chr_interaction_list);
+        chrMatrixList = new CreateMatrix(BedpeFile, Chromosomes, Resolution, null, Threads).Run(temp_chr_interaction_list);
         //====================================绘制出所有的cluster区域===========================
         for (int i = 0; i < temp_chr_interaction_list.size(); i++) {
             InterAction action1 = temp_chr_interaction_list.get(i);
-            MatrixItem item = new MatrixItem(ChrMatrix.get(i).getData());
+            MatrixItem item = new MatrixItem(chrMatrixList.get(i).getData());
             //----------------------------------------打印矩阵------------------------------------------------
             Tools.PrintMatrix(item.item, new File(OutDir + "/" + action1.getLeft().Chr + "-" + action1.getRight().Chr + "/" + OutPrefix + "." + action1.getLeft().Chr + "-" + action1.getRight().Chr + ".dense.matrix"), new File(OutDir + "/" + action1.getLeft().Chr + "-" + action1.getRight().Chr + "/" + OutPrefix + "." + action1.getLeft().Chr + "-" + action1.getRight().Chr + ".sparse.matrix"));
             System.out.println(new Date() + "\tDraw cluster in " + action1.getLeft().Chr + "-" + action1.getRight().Chr);
@@ -262,7 +263,7 @@ public class TransLocationDetection {
             }
             ImageIO.write(image, "png", new File(OutDir + "/" + action1.getLeft().Chr + "-" + action1.getRight().Chr + "/" + OutPrefix + "." + action1.getLeft().Chr + "-" + action1.getRight().Chr + ".cluster.png"));
         }
-        ChrMatrix.clear();
+        chrMatrixList.clear();
         //====================================================================================
         order = 0;
         for (InterAction action : TempInteractionList) {
@@ -802,6 +803,15 @@ public class TransLocationDetection {
             new short[]{1, 1, 1, 1, 0, -1, -1, -1, -1}
     };
 
+    /**
+     * 将距离较进的点聚在一起，并过滤掉不满足条件的组合
+     * 先过滤交互点较少，交互区域较小的组合
+     * 再过滤掉平均密度较小的组合
+     * 再用更大一些的扩展长度合并剩下的组合
+     * @param minCount
+     * @return 预处理过后的cluster
+     * @throws IOException
+     */
     private ArrayList<InterAction> PreProcessing(int minCount) throws IOException {
         PetCluster pet = new PetCluster(BedpeFile, OutDir + "/" + OutPrefix, ExtendLength, ExtendLength, Threads);//create a "PetCluster" class,the interaction which have overlap will be merged
         //-----------------------------------------Cluster--------------------------------------------------------------
@@ -825,6 +835,7 @@ public class TransLocationDetection {
         List = new ArrayList<>();
         System.out.println(new Date() + "\t" + NewList.size() + " cluster remained after filter");
         System.out.println(new Date() + "\tStart identify significant cluster");
+        //filter low density clusters
         float AverageCount = (float) BedpeFile.ItemNum / SizeAll;
         System.out.println("Reads pair: " + BedpeFile.ItemNum + "\tRef Size: " + SizeAll + "\tAverage count: " + AverageCount);
         for (int i = 0; i < NewList.size(); i++) {
